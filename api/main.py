@@ -14,8 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from pathlib import Path as PfadTyp
@@ -73,6 +74,19 @@ def _quota_exception() -> HTTPException:
 def _ist_quota_fehler(e: Exception) -> bool:
     meldung = str(e)
     return "RESOURCE_EXHAUSTED" in meldung or "429" in meldung
+
+
+@app.exception_handler(Exception)
+async def unbehandelte_fehler(request: Request, exc: Exception):
+    """Macht JEDEN unbehandelten Fehler im UI sichtbar (Fehlertyp + Klartext),
+    statt nur 'Internal Server Error'. HTTPExceptions haben ihren eigenen
+    Handler und landen hier nicht."""
+    if _ist_quota_fehler(exc):
+        return JSONResponse(status_code=429, content={"detail": _quota_exception().detail})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(exc).__name__}: {str(exc)[:500]}"},
+    )
 
 
 class EntwurfDaten(BaseModel):
