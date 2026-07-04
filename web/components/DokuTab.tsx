@@ -19,7 +19,7 @@ interface Schritt {
 const SCHRITTE: Schritt[] = [
   {
     titel: "Posteingang",
-    text: "Der Bulk-Upload nimmt gemischte PDFs an. Pro Datei bestimmt ein LLM-Aufruf, welche Dokumente darin stecken (Segmente als Seitenbereiche), von wem sie stammen und wo ein Dokument endet — ein Sammel-PDF aus zweiseitigem Lebenslauf und Anschreiben wird von pypdf physisch aufgeteilt. Dokumente mit demselben erkannten Namen landen in derselben Bewerbung.",
+    text: "Der Bulk-Upload nimmt gemischte PDFs an. Pro Datei bestimmt ein LLM-Aufruf, welche Dokumente darin stecken (Segmente als Seitenbereiche), von wem sie stammen und wo ein Dokument endet. Ein Sammel-PDF aus zweiseitigem Lebenslauf und Anschreiben wird von pypdf physisch aufgeteilt. Dokumente mit demselben erkannten Namen landen in derselben Bewerbung.",
     datei: "core/eingang.py",
     llm: "1 Aufruf pro hochgeladenem PDF",
   },
@@ -37,7 +37,7 @@ const SCHRITTE: Schritt[] = [
   },
   {
     titel: "K.O.-Prüfung",
-    text: "Reine Python-Logik über den Klassifikations-Ergebnissen: Fehlt ein als erforderlich markiertes Dokument, endet die Pipeline hier — die Bewerbung wird ohne LLM-Bewertung abgelehnt und der Grund im Verlauf vermerkt. Technisch ist das ein RunnableBranch in der LCEL-Kette.",
+    text: "Reine Python-Logik über den Klassifikations-Ergebnissen: Fehlt ein als erforderlich markiertes Dokument, endet die Pipeline hier. Die Bewerbung wird ohne LLM-Bewertung abgelehnt und der Grund im Verlauf vermerkt. Technisch ist das ein RunnableBranch in der LCEL-Kette.",
     datei: "core/pipeline.py",
     llm: null,
   },
@@ -49,19 +49,19 @@ const SCHRITTE: Schritt[] = [
   },
   {
     titel: "Bewertung",
-    text: "Das Herzstück: Das LLM bewertet die vier Kriterien einzeln nach einer festen Rubrik (1–2 keine Anzeichen … 9–10 übertrifft die Anforderungen) und muss jeden Score mit wörtlichen Zitaten aus den Unterlagen belegen. Die Antwort ist per Pydantic-Schema erzwungen strukturiert — inklusive Ablehnungsgründen als feste Kategorien statt Freitext. Das Motivationsschreiben dient als Kontext, ersetzt aber keine fehlende Qualifikation im CV.",
+    text: "Das Herzstück: Das LLM bewertet die vier Kriterien einzeln nach einer festen Rubrik (1–2 keine Anzeichen … 9–10 übertrifft die Anforderungen) und muss jeden Score mit wörtlichen Zitaten aus den Unterlagen belegen. Die Antwort ist per Pydantic-Schema erzwungen strukturiert, inklusive Ablehnungsgründen als feste Kategorien statt Freitext. Das Motivationsschreiben dient als Kontext, ersetzt aber keine fehlende Qualifikation im CV.",
     datei: "core/evaluation.py · core/schemas.py",
     llm: "1 Aufruf",
   },
   {
     titel: "Selbstkritik",
-    text: "Ein zweiter, unabhängiger LLM-Aufruf prüft die Bewertung gegen die Unterlagen: Finden sich die Zitate wirklich im Text? Passt die Score-Höhe zur Begründung? Bei Beanstandung wird die Bewertung genau einmal mit den Korrekturhinweisen wiederholt — bewusst begrenzt, keine Endlosschleife. Korrigierte Bewertungen sind im Verlauf markiert.",
+    text: "Ein zweiter, unabhängiger LLM-Aufruf prüft die Bewertung gegen die Unterlagen: Finden sich die Zitate wirklich im Text? Passt die Score-Höhe zur Begründung? Bei Beanstandung wird die Bewertung genau einmal mit den Korrekturhinweisen wiederholt (bewusst begrenzt, keine Endlosschleife). Korrigierte Bewertungen sind im Verlauf markiert.",
     datei: "core/evaluation.py · core/pipeline.py",
     llm: "1 Aufruf (+1 bei Korrektur)",
   },
   {
     titel: "Score & Einstufung",
-    text: "Der Gesamt-Score wird NICHT vom LLM vergeben, sondern deterministisch in Python berechnet (Details unten). Daraus folgt die Empfehlung, daraus der Status. Alles landet in SQLite — der Verlauf überlebt also Neustarts.",
+    text: "Der Gesamt-Score wird NICHT vom LLM vergeben, sondern deterministisch in Python berechnet (Details unten). Daraus folgt die Empfehlung, daraus der Status. Alles landet in SQLite, der Verlauf überlebt also Neustarts.",
     datei: "core/ranking.py · core/storage.py",
     llm: null,
   },
@@ -99,8 +99,8 @@ export default function DokuTab({ labels }: { labels: Labels }) {
     <div className="mx-auto max-w-2xl space-y-14">
       <section>
         <p className="text-sm leading-relaxed text-ink-soft">
-          Diese Seite erklärt, was zwischen PDF-Upload und Ranking passiert —
-          als Einstieg für alle, die am Code mitarbeiten oder die Ergebnisse
+          Diese Seite erklärt, was zwischen PDF-Upload und Ranking passiert:
+          ein Einstieg für alle, die am Code mitarbeiten oder die Ergebnisse
           nachvollziehen wollen. Kern ist eine{" "}
           <strong className="font-medium text-ink">
             LangChain-LCEL-Pipeline
@@ -161,11 +161,11 @@ export default function DokuTab({ labels }: { labels: Labels }) {
       <section>
         <h2 className="font-serif text-2xl italic">Wie entsteht der Score?</h2>
         <p className="mt-4 text-sm leading-relaxed text-ink-soft">
-          Das LLM vergibt pro Kriterium 1–10 nach fester Rubrik — den
+          Das LLM vergibt pro Kriterium 1–10 nach fester Rubrik; den
           Gesamt-Score rechnet Python als gewichtete Summe, skaliert auf
           10–100. LLMs sind als Gesamt-Urteiler schlecht kalibriert (Scores
           clustern um 7–8); die Mathe-Schicht macht das Ranking reproduzierbar
-          und die Gewichtung diskutierbar — sie steht in{" "}
+          und die Gewichtung diskutierbar. Sie steht in{" "}
           <code className="text-xs">core/config.py</code>.
         </p>
 
@@ -224,8 +224,9 @@ export default function DokuTab({ labels }: { labels: Labels }) {
           Ab <strong className="font-medium text-ink">{formatScore(konfig.schwelle_einladen)}</strong> lautet
           die Empfehlung <em>Einladen</em>, ab{" "}
           <strong className="font-medium text-ink">{formatScore(konfig.schwelle_pruefen)}</strong>{" "}
-          <em>Prüfen</em>, darunter <em>Ablehnen</em>. Im Tab „Genehmigt"
-          landet, wer nicht abgelehnt wurde — die finale Entscheidung trifft
+          <em>Prüfen</em>, darunter <em>Ablehnen</em>. Im Tab
+          „Genehmigt&ldquo; landet, wer nicht abgelehnt wurde; die finale
+          Entscheidung trifft
           immer ein Mensch. Kleine Unterschiede (±5 Punkte) sind nicht
           signifikant.
         </p>
@@ -239,7 +240,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
         <p className="mt-4 text-sm leading-relaxed text-ink-soft">
           K.O.-Kriterien sind harte Formal-Checks <em>vor</em> der Bewertung:
           Fehlt ein Pflichtdokument, gibt es weder Score noch
-          LLM-Einschätzung — nur einen Verlaufs-Eintrag mit dem Grund.
+          LLM-Einschätzung, nur einen Verlaufs-Eintrag mit dem Grund.
           Aktuell konfigurierbar:
         </p>
         <ul className="mt-3 space-y-1.5">
@@ -254,7 +255,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
         </ul>
         <p className="mt-5 text-sm leading-relaxed text-ink-soft">
           Inhaltliche Schwächen erfasst das LLM dagegen als feste
-          Kategorien — kein Freitext, damit man im Verlauf filtern und
+          Kategorien (kein Freitext), damit man im Verlauf filtern und
           zählen kann, woran Bewerbungen scheitern:
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -289,7 +290,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
               Kein OCR für gescannte PDFs. Anonymisierung entfernt direkte
               Merkmale, aber keine indirekten Proxys (Stadtteile,
               Vereinsnamen). Der EU AI Act stuft Bewerber-Screening als
-              Hochrisiko-System ein — dieses Projekt ist eine Studienarbeit,
+              Hochrisiko-System ein; dieses Projekt ist eine Studienarbeit,
               kein Produktivsystem, und ersetzt keine HR-Entscheidung.
             </dd>
           </div>
@@ -299,7 +300,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
               <code className="text-xs">
                 python scripts/screen_cli.py data/test_cvs/* --ko-motivationsschreiben
               </code>{" "}
-              fährt das komplette Screening über die Testdaten — inklusive
+              fährt das komplette Screening über die Testdaten, inklusive
               eines Kandidaten, der absichtlich am K.O. scheitert, und eines
               Sammel-PDFs für den Bulk-Upload.
             </dd>

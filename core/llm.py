@@ -1,4 +1,4 @@
-"""LLM-Factory: Gemini mit temperature=0 (bezahlter API-Key, kein Rate-Limit)."""
+"""LLM-Factory: Gemini mit temperature=0."""
 
 import os
 
@@ -10,7 +10,10 @@ from core.config import MODELL_NAME, PROJEKT_ROOT
 # .env explizit aus dem Projekt-Root laden - unabhaengig davon, aus welchem
 # Verzeichnis uvicorn gestartet wird. (load_dotenv() ohne Pfad sucht nur ab
 # dem aktuellen Arbeitsverzeichnis und findet die Datei dann evtl. nicht.)
-load_dotenv(PROJEKT_ROOT / ".env")
+# override=True: eine versehentlich in der Shell exportierte (leere/alte)
+# GOOGLE_API_KEY-Variable darf die .env nicht aushebeln - sonst schickt die
+# Google-Bibliothek keinen Key mit und antwortet mit 401 UNAUTHENTICATED.
+load_dotenv(PROJEKT_ROOT / ".env", override=True)
 
 
 def api_key_vorhanden() -> bool:

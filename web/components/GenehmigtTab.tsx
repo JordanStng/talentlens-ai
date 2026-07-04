@@ -31,8 +31,8 @@ export default function GenehmigtTab({ labels }: { labels: Labels }) {
           Noch niemand im Rennen.
         </p>
         <p className="mt-2 text-sm text-ink-faint">
-          Genehmigte Bewerbungen erscheinen hier sortiert nach Score —
-          die beste zuerst.
+          Genehmigte Bewerbungen erscheinen hier sortiert nach Score, die
+          beste zuerst.
         </p>
       </div>
     );

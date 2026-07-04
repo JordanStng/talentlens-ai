@@ -37,7 +37,7 @@ export default function VerlaufTab({ labels }: { labels: Labels }) {
           Der Verlauf ist leer.
         </p>
         <p className="mt-2 text-sm text-ink-faint">
-          Hier landet jede Bewertung — auch abgelehnte, mit Begründung.
+          Hier erscheinen alle Bewertungen, auch abgelehnte mit Begründung.
         </p>
       </div>
     );
@@ -79,7 +79,7 @@ export default function VerlaufTab({ labels }: { labels: Labels }) {
               onClick={() =>
                 e.bewertung && setOffen(offen === e.id ? null : e.id)
               }
-              className={`grid w-full grid-cols-[5.5rem_1fr_auto_4rem] items-baseline gap-4 py-3.5 text-left transition-colors ${
+              className={`grid w-full grid-cols-[5.5rem_1fr_auto_5.5rem] items-baseline gap-4 py-3.5 text-left transition-colors ${
                 e.bewertung ? "hover:bg-surface" : "cursor-default"
               }`}
               aria-expanded={offen === e.id}
@@ -98,9 +98,20 @@ export default function VerlaufTab({ labels }: { labels: Labels }) {
                   </span>
                 )}
               </span>
-              <StatusChip status={e.status} ko={e.ko_grund !== null} />
+              <StatusChip
+                status={e.status}
+                ko={e.ko_grund !== null}
+                empfehlung={e.empfehlung}
+              />
               <span className="text-right font-serif text-xl">
-                {e.gesamt_score !== null ? formatScore(e.gesamt_score) : "—"}
+                {e.gesamt_score !== null ? (
+                  <>
+                    {formatScore(e.gesamt_score)}
+                    <span className="text-xs text-ink-faint">/100</span>
+                  </>
+                ) : (
+                  "—"
+                )}
               </span>
             </button>
             <div

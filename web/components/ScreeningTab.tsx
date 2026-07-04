@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   analysiereEntwurf,
+  ApiError,
   benenneEntwurfUm,
   bulkUpload,
   erstelleEntwurf,
   fetchEntwuerfe,
+  fetchErgebnisse,
   ladeDateienHoch,
   loescheDatei,
   loescheEntwurf,
@@ -17,7 +19,13 @@ import type {
   Labels,
   ScreeningErgebnis,
 } from "@/lib/types";
-import { EmpfehlungChip, formatScore, Spinner, StatusChip } from "./ui";
+import {
+  EmpfehlungChip,
+  formatScore,
+  FortschrittsBalken,
+  Spinner,
+  StatusChip,
+} from "./ui";
 
 interface Karte {
   key: number; // lokaler React-Key
@@ -27,6 +35,11 @@ interface Karte {
   status: "offen" | "laedt" | "laeuft" | "fertig" | "fehler";
   ergebnis?: ScreeningErgebnis;
   fehler?: string;
+}
+
+interface Fortschritt {
+  fertig: number;
+  gesamt: number;
 }
 
 let naechsterKey = 1;
@@ -48,43 +61,68 @@ const karteAusEntwurf = (e: Entwurf): Karte => ({
 
 export default function ScreeningTab({
   stelle,
-  setStelle,
   labels,
+  lebenslaufPflicht,
+  motivationPflicht,
+  zuAnforderungen,
 }: {
   stelle: string;
-  setStelle: (s: string) => void;
   labels: Labels;
+  lebenslaufPflicht: boolean;
+  motivationPflicht: boolean;
+  zuAnforderungen: () => void;
 }) {
   const [karten, setKarten] = useState<Karte[] | null>(null);
-  const [lebenslaufPflicht, setLebenslaufPflicht] = useState(true);
-  const [motivationPflicht, setMotivationPflicht] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
   const [sortiert, setSortiert] = useState(false); // Bulk-Upload laeuft
+  const [bulkFortschritt, setBulkFortschritt] = useState<Fortschritt | null>(
+    null,
+  );
+  const [analyseFortschritt, setAnalyseFortschritt] =
+    useState<Fortschritt | null>(null);
   const [eingangInfo, setEingangInfo] = useState<string[]>([]);
   const [eingangFehler, setEingangFehler] = useState<string[]>([]);
 
-  // Persistierte Entwuerfe wiederherstellen; K.O.-Haken aus localStorage
+  // Persistierte Entwuerfe wiederherstellen
   useEffect(() => {
-    setLebenslaufPflicht(localStorage.getItem("tl.ko.lebenslauf") !== "0");
-    setMotivationPflicht(localStorage.getItem("tl.ko.motivation") === "1");
     fetchEntwuerfe()
       .then((entwuerfe) => setKarten(entwuerfe.map(karteAusEntwurf)))
       .catch(() => setKarten([]));
   }, []);
 
-  useEffect(() => {
-    if (karten !== null)
-      localStorage.setItem("tl.ko.lebenslauf", lebenslaufPflicht ? "1" : "0");
-  }, [lebenslaufPflicht, karten]);
-  useEffect(() => {
-    if (karten !== null)
-      localStorage.setItem("tl.ko.motivation", motivationPflicht ? "1" : "0");
-  }, [motivationPflicht, karten]);
-
   const aktualisiere = (key: number, patch: Partial<Karte>) =>
     setKarten((alle) =>
       (alle ?? []).map((k) => (k.key === key ? { ...k, ...patch } : k)),
     );
+
+  /** Server-Stand einpflegen, ohne bestehende Karten neu zu erzeugen —
+   *  so bleiben React-Keys stabil und nichts flackert beim Bulk-Upload. */
+  const uebernehmeServerStand = (entwuerfe: Entwurf[]) =>
+    setKarten((alle) => {
+      const bisher = alle ?? [];
+      const vorhandene = new Map(
+        bisher
+          .filter((k) => k.serverId !== null && k.status !== "fertig")
+          .map((k) => [k.serverId as number, k]),
+      );
+      const aktualisierte = entwuerfe.map((e) => {
+        const karte = vorhandene.get(e.id);
+        return karte
+          ? {
+              ...karte,
+              dateien: e.dateien,
+              name: karte.name || (e.kandidat === "Bewerbung" ? "" : e.kandidat),
+            }
+          : karteAusEntwurf(e);
+      });
+      return [
+        ...aktualisierte,
+        // leere manuelle Karten und fertige Ergebnis-Karten behalten
+        ...bisher.filter(
+          (k) => k.serverId === null || k.status === "fertig",
+        ),
+      ];
+    });
 
   async function dateienHinzufuegen(karte: Karte, neue: File[]) {
     const pdfs = neue.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
@@ -99,6 +137,7 @@ export default function ScreeningTab({
         serverId,
         dateien: entwurf.dateien,
         status: "offen",
+        fehler: undefined,
       });
     } catch (e) {
       aktualisiere(karte.key, {
@@ -123,46 +162,98 @@ export default function ScreeningTab({
     setKarten((alle) => (alle ?? []).filter((k) => k.key !== karte.key));
   }
 
+  /** Bulk-Upload: eine Datei pro Request. So bleibt jeder Aufruf kurz
+   *  (kein Proxy-Timeout bei vielen PDFs) und der Fortschritt ist sichtbar. */
   async function bulkHochladen(neue: File[]) {
     const pdfs = neue.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
     if (!pdfs.length) return;
     setSortiert(true);
     setEingangInfo([]);
     setEingangFehler([]);
-    try {
-      const erg = await bulkUpload(pdfs);
-      // Server-Stand uebernehmen; fertige Karten (leben im Verlauf) behalten
-      setKarten((alle) => [
-        ...erg.entwuerfe.map(karteAusEntwurf),
-        ...(alle ?? []).filter((k) => k.status === "fertig"),
-      ]);
-      setEingangInfo(
-        erg.verarbeitet.map(
-          (v) =>
-            `${v.datei} → ${v.kandidat}` +
-            (v.dokumente.length > 1
-              ? ` · in ${v.dokumente.length} Dokumente aufgeteilt`
-              : ""),
-        ),
-      );
-      setEingangFehler(erg.fehler.map((f) => `${f.datei}: ${f.meldung}`));
-    } catch (e) {
-      setEingangFehler([e instanceof Error ? e.message : String(e)]);
+    setBulkFortschritt({ fertig: 0, gesamt: pdfs.length });
+
+    const info: string[] = [];
+    const fehlerZeilen: string[] = [];
+    for (const [i, pdf] of pdfs.entries()) {
+      try {
+        const erg = await bulkUpload([pdf]);
+        uebernehmeServerStand(erg.entwuerfe);
+        info.push(
+          ...erg.verarbeitet.map(
+            (v) =>
+              `${v.datei} → ${v.kandidat}` +
+              (v.dokumente.length > 1
+                ? ` · in ${v.dokumente.length} Dokumente aufgeteilt`
+                : ""),
+          ),
+        );
+        fehlerZeilen.push(...erg.fehler.map((f) => `${f.datei}: ${f.meldung}`));
+      } catch (e) {
+        const meldung = e instanceof Error ? e.message : String(e);
+        fehlerZeilen.push(`${pdf.name}: ${meldung}`);
+        // Quota erschoepft oder Passwort falsch: weitere Versuche sind zwecklos
+        if (e instanceof ApiError && (e.status === 429 || e.status === 401)) {
+          if (i < pdfs.length - 1)
+            fehlerZeilen.push(
+              `Upload abgebrochen — ${pdfs.length - 1 - i} Datei(en) nicht verarbeitet.`,
+            );
+          setBulkFortschritt({ fertig: i + 1, gesamt: pdfs.length });
+          break;
+        }
+      }
+      setBulkFortschritt({ fertig: i + 1, gesamt: pdfs.length });
+      setEingangInfo([...info]);
+      setEingangFehler([...new Set(fehlerZeilen)]);
     }
+    setEingangInfo([...info]);
+    setEingangFehler([...new Set(fehlerZeilen)]);
     setSortiert(false);
+    setBulkFortschritt(null);
   }
 
   const bereit = (karten ?? []).filter(
     (k) => k.serverId !== null && k.dateien.length > 0 && k.status !== "fertig",
   );
 
+  /** Wenn die Antwort der Analyse verloren ging (z.B. Verbindungsabbruch),
+   *  ist der Entwurf serverseitig oft trotzdem fertig bewertet und geloescht.
+   *  Dann das Ergebnis aus dem Verlauf nachladen statt einen Fehler zu zeigen. */
+  async function ergebnisNachladen(
+    k: Karte,
+    kandidat: string,
+  ): Promise<boolean> {
+    try {
+      const entwuerfe = await fetchEntwuerfe();
+      if (entwuerfe.some((e) => e.id === k.serverId)) return false; // Entwurf existiert noch -> echter Fehler
+      const ergebnisse = await fetchErgebnisse(); // neueste zuerst
+      const passend = ergebnisse.find((e) => e.kandidat === kandidat);
+      if (!passend) return false;
+      aktualisiere(k.key, {
+        status: "fertig",
+        ergebnis: passend,
+        serverId: null,
+        fehler: undefined,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function analysieren() {
     setLaeuft(true);
-    for (const k of bereit) {
+    // alte Upload-Meldungen sind jetzt erledigt — weg damit
+    setEingangInfo([]);
+    setEingangFehler([]);
+    const warteschlange = bereit;
+    setAnalyseFortschritt({ fertig: 0, gesamt: warteschlange.length });
+    let fertig = 0;
+    for (const k of warteschlange) {
+      const kandidat = k.name.trim() || `Bewerbung ${k.serverId}`;
       aktualisiere(k.key, { status: "laeuft", fehler: undefined });
       try {
         const ergebnis = await analysiereEntwurf(k.serverId!, {
-          kandidat: k.name.trim() || `Bewerbung ${k.serverId}`,
+          kandidat,
           stelle,
           lebenslaufErforderlich: lebenslaufPflicht,
           motivationsschreibenErforderlich: motivationPflicht,
@@ -170,72 +261,109 @@ export default function ScreeningTab({
         // Entwurf lebt jetzt im Verlauf; Karte zeigt das Ergebnis nur noch an
         aktualisiere(k.key, { status: "fertig", ergebnis, serverId: null });
       } catch (e) {
-        aktualisiere(k.key, {
-          status: "fehler",
-          fehler: e instanceof Error ? e.message : String(e),
-        });
+        const geheilt = await ergebnisNachladen(k, kandidat);
+        if (!geheilt)
+          aktualisiere(k.key, {
+            status: "fehler",
+            fehler: e instanceof Error ? e.message : String(e),
+          });
       }
+      fertig++;
+      setAnalyseFortschritt({ fertig, gesamt: warteschlange.length });
     }
     setLaeuft(false);
+    setAnalyseFortschritt(null);
   }
 
   if (karten === null)
     return <p className="text-sm text-ink-faint">Lade…</p>;
 
   const fertige = karten.filter((k) => k.status === "fertig");
+  const stellenTitel = stelle
+    .split("\n")
+    .map((zeile) => zeile.replace(/^#+\s*/, "").trim())
+    .find(Boolean);
+  const pflichten = [
+    lebenslaufPflicht && "Lebenslauf",
+    motivationPflicht && "Motivationsschreiben",
+  ].filter(Boolean);
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[1fr_300px]">
-      <section className="space-y-4">
-        <BulkZone
-          deaktiviert={laeuft || sortiert}
-          sortiert={sortiert}
-          onDateien={bulkHochladen}
-        />
-        {(eingangInfo.length > 0 || eingangFehler.length > 0) && (
-          <ul className="space-y-0.5 px-1 text-xs">
-            {eingangInfo.map((zeile) => (
-              <li key={zeile} className="text-ink-faint">
-                {zeile}
-              </li>
-            ))}
-            {eingangFehler.map((zeile) => (
-              <li key={zeile} className="text-rot">
-                {zeile}
-              </li>
-            ))}
-          </ul>
+    <div className="mx-auto max-w-3xl space-y-4">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+        {stellenTitel ? (
+          <>
+            <span className="text-ink-faint">Stelle:</span>
+            <span className="font-medium">{stellenTitel}</span>
+          </>
+        ) : (
+          <span className="text-rot">
+            Keine Stellenausschreibung hinterlegt.
+          </span>
         )}
-
-        {karten.map((k) => (
-          <BewerbungsKarte
-            key={k.key}
-            karte={k}
-            labels={labels}
-            deaktiviert={laeuft}
-            onName={(name) => aktualisiere(k.key, { name })}
-            onNameFertig={() => {
-              if (k.serverId)
-                benenneEntwurfUm(
-                  k.serverId,
-                  k.name.trim() || "Bewerbung",
-                ).catch(() => {});
-            }}
-            onDateien={(dateien) => dateienHinzufuegen(k, dateien)}
-            onDateiEntfernen={(name) => dateiEntfernen(k, name)}
-            onEntfernen={() => karteEntfernen(k)}
-          />
-        ))}
-
+        <span className="text-ink-faint">
+          · K.O.-Kriterien:{" "}
+          {pflichten.length ? `${pflichten.join(" + ")} erforderlich` : "keine"}
+        </span>
         <button
-          onClick={() => setKarten((alle) => [...(alle ?? []), leereKarte()])}
-          disabled={laeuft || sortiert}
-          className="px-1 text-xs text-ink-faint transition-colors hover:text-tanne disabled:opacity-40"
+          onClick={zuAnforderungen}
+          className="ml-auto text-xs font-medium text-tanne transition-colors hover:text-tanne-deep"
         >
-          + Bewerbung manuell anlegen
+          Anforderungen bearbeiten →
         </button>
+      </div>
 
-        <div className="flex items-center gap-4 pt-2">
+      <BulkZone
+        deaktiviert={laeuft || sortiert}
+        sortiert={sortiert}
+        fortschritt={bulkFortschritt}
+        onDateien={bulkHochladen}
+      />
+      {(eingangInfo.length > 0 || eingangFehler.length > 0) && (
+        <ul className="space-y-0.5 px-1 text-xs">
+          {eingangInfo.map((zeile) => (
+            <li key={zeile} className="text-ink-faint">
+              {zeile}
+            </li>
+          ))}
+          {eingangFehler.map((zeile) => (
+            <li key={zeile} className="text-rot">
+              {zeile}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {karten.map((k) => (
+        <BewerbungsKarte
+          key={k.key}
+          karte={k}
+          labels={labels}
+          deaktiviert={laeuft}
+          onName={(name) => aktualisiere(k.key, { name })}
+          onNameFertig={() => {
+            if (k.serverId)
+              benenneEntwurfUm(
+                k.serverId,
+                k.name.trim() || "Bewerbung",
+              ).catch(() => {});
+          }}
+          onDateien={(dateien) => dateienHinzufuegen(k, dateien)}
+          onDateiEntfernen={(name) => dateiEntfernen(k, name)}
+          onEntfernen={() => karteEntfernen(k)}
+        />
+      ))}
+
+      <button
+        onClick={() => setKarten((alle) => [...(alle ?? []), leereKarte()])}
+        disabled={laeuft || sortiert}
+        className="px-1 text-xs text-ink-faint transition-colors hover:text-tanne disabled:opacity-40"
+      >
+        + Bewerbung manuell anlegen
+      </button>
+
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center gap-4">
           <button
             onClick={analysieren}
             disabled={laeuft || bereit.length === 0 || !stelle.trim()}
@@ -245,6 +373,12 @@ export default function ScreeningTab({
               ? "Analyse läuft…"
               : `${bereit.length === 1 ? "1 Bewerbung" : `${bereit.length} Bewerbungen`} analysieren`}
           </button>
+          {!laeuft && bereit.length > 0 && !stelle.trim() && (
+            <p className="text-sm text-rot">
+              Erst im Tab „Anforderungen&ldquo; eine Stellenausschreibung
+              hinterlegen.
+            </p>
+          )}
           {fertige.length > 0 && !laeuft && (
             <p className="text-sm text-ink-faint">
               {fertige.filter((k) => k.ergebnis?.status === "genehmigt").length}{" "}
@@ -254,48 +388,19 @@ export default function ScreeningTab({
             </p>
           )}
         </div>
-      </section>
-
-      <aside className="space-y-8 lg:border-l lg:border-line lg:pl-8">
-        <div>
-          <h2 className="text-sm font-medium">K.O.-Kriterien</h2>
-          <p className="mt-1 text-xs leading-relaxed text-ink-faint">
-            Wird ein Pflichtdokument nicht erkannt, wird die Bewerbung ohne
-            LLM-Bewertung direkt abgelehnt.
-          </p>
-          <div className="mt-3 space-y-2.5">
-            <label className="flex items-start gap-2.5 text-sm">
-              <input
-                type="checkbox"
-                checked={lebenslaufPflicht}
-                onChange={(e) => setLebenslaufPflicht(e.target.checked)}
-                className="mt-0.5 size-4 accent-tanne"
-              />
-              Lebenslauf erforderlich
-            </label>
-            <label className="flex items-start gap-2.5 text-sm">
-              <input
-                type="checkbox"
-                checked={motivationPflicht}
-                onChange={(e) => setMotivationPflicht(e.target.checked)}
-                className="mt-0.5 size-4 accent-tanne"
-              />
-              Motivationsschreiben erforderlich
-            </label>
+        {laeuft && analyseFortschritt && (
+          <div className="max-w-md space-y-1.5">
+            <FortschrittsBalken
+              fertig={analyseFortschritt.fertig}
+              gesamt={analyseFortschritt.gesamt}
+            />
+            <p className="text-xs text-ink-faint">
+              {analyseFortschritt.fertig} von {analyseFortschritt.gesamt}{" "}
+              Bewerbungen bewertet
+            </p>
           </div>
-        </div>
-
-        <div>
-          <h2 className="text-sm font-medium">Stellenausschreibung</h2>
-          <textarea
-            value={stelle}
-            onChange={(e) => setStelle(e.target.value)}
-            disabled={laeuft}
-            rows={14}
-            className="mt-3 w-full resize-y rounded-lg border border-line bg-surface p-3 text-xs leading-relaxed text-ink-soft outline-none focus:border-tanne"
-          />
-        </div>
-      </aside>
+        )}
+      </div>
     </div>
   );
 }
@@ -303,10 +408,12 @@ export default function ScreeningTab({
 function BulkZone({
   deaktiviert,
   sortiert,
+  fortschritt,
   onDateien,
 }: {
   deaktiviert: boolean;
   sortiert: boolean;
+  fortschritt: Fortschritt | null;
   onDateien: (dateien: File[]) => void;
 }) {
   const [zieht, setZieht] = useState(false);
@@ -332,9 +439,21 @@ function BulkZone({
       }`}
     >
       {sortiert ? (
-        <span className="flex items-center justify-center gap-3 text-sm text-ink-soft">
-          <Spinner /> Sortiere Unterlagen — erkenne Dokumente und Kandidaten…
-        </span>
+        <div className="mx-auto max-w-xs space-y-3">
+          <span className="flex items-center justify-center gap-3 text-sm text-ink-soft">
+            <Spinner /> Sortiere Unterlagen
+            {fortschritt
+              ? ` (${Math.min(fortschritt.fertig + 1, fortschritt.gesamt)}/${fortschritt.gesamt})`
+              : ""}
+            …
+          </span>
+          {fortschritt && (
+            <FortschrittsBalken
+              fertig={fortschritt.fertig}
+              gesamt={fortschritt.gesamt}
+            />
+          )}
+        </div>
       ) : (
         <>
           <p className="font-serif text-xl italic text-ink">
@@ -414,11 +533,13 @@ function BewerbungsKarte({
               {ergebnis.gesamt_score !== null && (
                 <span className="font-serif text-lg">
                   {formatScore(ergebnis.gesamt_score)}
+                  <span className="text-xs text-ink-faint">/100</span>
                 </span>
               )}
               <StatusChip
                 status={ergebnis.status}
                 ko={ergebnis.ko_grund !== null}
+                empfehlung={ergebnis.empfehlung}
               />
             </span>
           )}
@@ -506,8 +627,8 @@ function BewerbungsKarte({
               : "border-line-strong text-ink-faint hover:border-tanne hover:text-tanne"
           }`}
         >
-          PDFs hierher ziehen oder klicken — mehrere Dateien pro Bewerbung
-          möglich (z.&nbsp;B. zweiteiliger Lebenslauf + Motivationsschreiben)
+          PDFs hier ablegen oder auswählen. Mehrere Dateien pro Bewerbung
+          möglich (z.&nbsp;B. zweiteiliger Lebenslauf + Motivationsschreiben).
           <input
             ref={inputRef}
             type="file"
