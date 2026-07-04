@@ -6,16 +6,25 @@ import type { Labels, VerlaufEintrag } from "@/lib/types";
 import BewertungDetails from "./BewertungDetails";
 import { EmpfehlungChip, formatScore } from "./ui";
 
-export default function GenehmigtTab({ labels }: { labels: Labels }) {
+export default function GenehmigtTab({
+  labels,
+  aktiv,
+}: {
+  labels: Labels;
+  aktiv: boolean;
+}) {
   const [eintraege, setEintraege] = useState<VerlaufEintrag[] | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [offen, setOffen] = useState<number | null>(null);
 
+  // Der Tab bleibt dauerhaft gemountet (nur versteckt) - deshalb bei jedem
+  // Aktivieren neu laden, damit frisch analysierte Bewerbungen erscheinen.
   useEffect(() => {
+    if (!aktiv) return;
     fetchErgebnisse()
       .then(setEintraege)
       .catch((e) => setFehler(e.message));
-  }, []);
+  }, [aktiv]);
 
   if (fehler) return <p className="text-sm text-rot">{fehler}</p>;
   if (!eintraege) return <p className="text-sm text-ink-faint">Lade…</p>;

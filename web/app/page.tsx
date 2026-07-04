@@ -120,7 +120,11 @@ export default function Home() {
         {passwortNoetig && <PasswortGate onFreigabe={laden} />}
         {labels && !passwortNoetig && (
           <>
-            {tab === "screening" && (
+            {/* Alle Tabs bleiben gemountet und werden nur versteckt: So
+                ueberlebt der Screening-Zustand (laufende Analysen, Karten,
+                Fortschritt) den Tab-Wechsel. Verlauf/Genehmigt laden beim
+                Aktivieren frisch nach. */}
+            <div className={tab === "screening" ? "" : "hidden"}>
               <ScreeningTab
                 stelle={stelle}
                 labels={labels}
@@ -128,8 +132,8 @@ export default function Home() {
                 motivationPflicht={motivationPflicht}
                 zuAnforderungen={() => setTab("anforderungen")}
               />
-            )}
-            {tab === "anforderungen" && (
+            </div>
+            <div className={tab === "anforderungen" ? "" : "hidden"}>
               <AnforderungenTab
                 stelle={stelle}
                 setStelle={stelleAendern}
@@ -138,10 +142,16 @@ export default function Home() {
                 motivationPflicht={motivationPflicht}
                 setMotivationPflicht={motivationAendern}
               />
-            )}
-            {tab === "genehmigt" && <GenehmigtTab labels={labels} />}
-            {tab === "verlauf" && <VerlaufTab labels={labels} />}
-            {tab === "doku" && <DokuTab labels={labels} />}
+            </div>
+            <div className={tab === "genehmigt" ? "" : "hidden"}>
+              <GenehmigtTab labels={labels} aktiv={tab === "genehmigt"} />
+            </div>
+            <div className={tab === "verlauf" ? "" : "hidden"}>
+              <VerlaufTab labels={labels} aktiv={tab === "verlauf"} />
+            </div>
+            <div className={tab === "doku" ? "" : "hidden"}>
+              <DokuTab labels={labels} />
+            </div>
           </>
         )}
         {!labels && !apiFehler && !passwortNoetig && (
