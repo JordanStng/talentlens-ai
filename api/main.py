@@ -100,10 +100,10 @@ def get_aufteilungs_chain():
 def _quota_exception() -> HTTPException:
     return HTTPException(
         status_code=429,
-        detail="Gemini-Quota erschoepft: Der API-Key laeuft im Free Tier "
-        "(20 Anfragen/Tag fuer gemini-2.5-flash). Billing im "
-        "Google-Cloud-Projekt aktivieren oder bis zum naechsten Tag "
-        "warten. Der Entwurf bleibt erhalten.",
+        detail="Gemini-Rate-Limit erreicht: Gerade laufen zu viele Anfragen "
+        "gleichzeitig. Einen Moment warten und erneut versuchen - der "
+        "Entwurf bleibt erhalten. (Tritt es dauerhaft auf: Quota-Limits "
+        "im Google-Cloud-Projekt pruefen.)",
     )
 
 

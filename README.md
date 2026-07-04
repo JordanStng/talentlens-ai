@@ -162,8 +162,8 @@ Hier eine **Public Domain generieren** — das ist die URL fuers Team. Ist
 Passwort-Maske.
 
 > Auch gehostet gilt: **nur fiktive Testdaten** hochladen (siehe
-> [Limitationen](#limitationen)), und im Free Tier teilen sich alle
-> Nutzer das Tageskontingent des Gemini-Keys.
+> [Limitationen](#limitationen)). Alle Nutzer der Instanz laufen ueber
+> denselben Gemini-Key - dessen Kosten bzw. Limits teilen sich alle.
 
 ## Test-Daten
 
