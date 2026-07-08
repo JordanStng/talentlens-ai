@@ -8,7 +8,9 @@ ueber den erkannten Bewerbernamen der richtigen Bewerbung zu. Danach wird
 gegen die Stellenausschreibung bewertet, nach Score sortiert und im
 Next.js-Dashboard mit Genehmigt- und Verlaufs-Ansicht dargestellt.
 K.O.-Kriterien (z.B. fehlendes Motivationsschreiben) lehnen Bewerbungen
-direkt ab — ohne LLM-Bewertung.
+direkt ab — ohne LLM-Bewertung. Der *Assistent*-Tab beantwortet freie
+Fragen zu den Ergebnissen — dahinter arbeitet ein Tool-Calling-Agent,
+der selbst entscheidet, welche Werkzeuge er aufruft.
 
 > Uni-Projekt. **Keine echten Bewerbungen verarbeiten** — siehe
 > [Limitationen](#limitationen).
@@ -56,10 +58,26 @@ LangChain LCEL-Pipeline:
      |                            (gewichtete Summe, KEIN LLM)
      v
   [SQLite]                        Persistenz fuer Genehmigt-Tab + Verlauf
+     ^
+     |  fuenf Lese-Werkzeuge
+  [HR-Assistent]                  core/agent.py: Tool-Calling-Agent fuer freie
+                                  Fragen ("Warum ist Ben rausgeflogen?") -
+                                  das LLM waehlt die Werkzeuge selbst
 ```
 
 ### Design-Entscheidungen
 
+- **Deterministische Pipeline, agentischer Assistent:** Das Screening
+  selbst ist bewusst eine feste LCEL-Kette — reproduzierbare Scores,
+  planbare Kosten, auditierbarer Ablauf. Freie Fragen beantwortet dagegen
+  der HR-Assistent (`core/agent.py`): ein Tool-Calling-Agent, der pro
+  Runde selbst entscheidet, welche seiner fuenf Lese-Werkzeuge
+  (Ergebnisliste, Einzelbewertung, Vergleich, Statistik, Ausschreibung)
+  er aufruft — begrenzt auf 5 Runden. Der Agent-Loop nutzt
+  LangChain-Primitive (`bind_tools` + `ToolMessage`): LangChain 1.x hat
+  den klassischen `AgentExecutor` entfernt, und der Nachfolger
+  `create_agent` basiert auf LangGraph, das hier bewusst nicht verwendet
+  wird.
 - **Gesamt-Score nicht vom LLM:** LLM-Gesamtscores sind schlecht kalibriert
   (clustern um 7–8, schwanken zwischen Laeufen). Das LLM bewertet nur die
   vier Einzelkriterien mit einer festen Rubrik; der Gesamt-Score ist eine
@@ -125,12 +143,28 @@ Dann http://localhost:3000 oeffnen:
   sortiert nach Score, mit aufklappbarer Begruendung und Zitaten.
 - **Verlauf:** Alle Bewertungen, auch abgelehnte — inkl. K.O.- und
   Ablehnungsgruenden.
+- **Assistent:** Freie Fragen zu den Ergebnissen ("Vergleiche Anna und
+  David bei den Skills") — der Agent zeigt unter jeder Antwort an,
+  welche Werkzeuge er aufgerufen hat.
 
 **CLI (ohne Frontend, ein Ordner = eine Bewerbung):**
 
 ```bash
 python scripts/screen_cli.py data/test_cvs/* --ko-motivationsschreiben
 ```
+
+## Tests
+
+```bash
+.venv/bin/python -m pytest
+```
+
+Getestet wird die deterministische Kern-Logik (Ranking-Gewichtung,
+K.O.-Pruefung, Schema-Validierung, SQLite-Persistenz, Text-Bereinigung)
+sowie die Werkzeuge und der Agent-Loop des Assistenten — letzterer mit
+einem Fake-LLM (`GenericFakeChatModel`), laeuft also ohne API-Key und
+ohne Kosten. Die LLM-Prompts selbst werden nicht automatisiert getestet;
+dafuer gibt es die Testdaten unter `data/test_cvs/` und die CLI.
 
 ## Deployment (Railway)
 
@@ -182,11 +216,12 @@ Bewerbungs-Ordner unter `data/test_cvs/`:
 ## Projektstruktur
 
 ```
-core/        LangChain: Pipeline, Chains, Schemas, Ranking, Persistenz
-api/         FastAPI-Schicht um die Pipeline
-web/         Next.js-Dashboard (Screening / Genehmigt / Verlauf)
+core/        LangChain: Pipeline, Chains, Agent, Schemas, Ranking, Persistenz
+api/         FastAPI-Schicht um Pipeline und Agent
+web/         Next.js-Dashboard (Screening / Genehmigt / Verlauf / Assistent)
 data/        Stellenausschreibung, Test-Bewerbungen, SQLite-DB (gitignored)
 scripts/     Test-Daten-Generator, CLI
+tests/       pytest-Suite (deterministische Logik + Agent-Loop mit Fake-LLM)
 ```
 
 ## Limitationen

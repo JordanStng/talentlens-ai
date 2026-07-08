@@ -9,21 +9,24 @@ gespeicherten Dateien; ein erfolgreich analysierter Entwurf wandert in den
 Verlauf und wird als Entwurf geloescht.
 """
 
+import json
 import os
 import secrets
 import sys
 from pathlib import Path
+from typing import Literal
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from pathlib import Path as PfadTyp
 
 from core import storage
+from core.agent import beantworte_frage
 from core.config import (
     KRITERIEN_GEWICHTE,
     MODELL_NAME,
@@ -33,7 +36,7 @@ from core.config import (
 )
 from core.eingang import build_aufteilungs_chain, sortiere_pdf
 from core.llm import api_key_vorhanden, get_llm
-from core.pipeline import build_screening_pipeline
+from core.pipeline import PIPELINE_SCHRITTE, build_screening_pipeline
 from core.schemas import DOKUMENT_LABELS, GRUND_LABELS, KO_LABELS, KRITERIUM_LABELS
 
 app = FastAPI(title="TalentLens API")
@@ -289,43 +292,44 @@ def eingang(dateien: list[UploadFile] = File(...)):
 
 # --- Analyse ---------------------------------------------------------------
 
-@app.post("/api/entwuerfe/{entwurf_id}/analysieren")
-def analysieren(
+def _analyse_eingabe(
     entwurf_id: int,
-    stelle: str = Form(...),
-    kandidat: str = Form(None),
-    lebenslauf_erforderlich: bool = Form(True),
-    motivationsschreiben_erforderlich: bool = Form(False),
-):
-    """Bewertet einen Entwurf. Synchroner Endpoint (def, nicht async)
-    -> FastAPI fuehrt ihn im Threadpool aus; das Frontend ruft pro
-    Bewerbung auf und zeigt so den Fortschritt pro Kandidat."""
+    stelle: str,
+    kandidat: str | None,
+    lebenslauf_erforderlich: bool,
+    motivationsschreiben_erforderlich: bool,
+) -> dict:
+    """Entwurf validieren und den Pipeline-Input bauen (404/422 bei Problemen)."""
     entwurf = _entwurf_oder_404(entwurf_id)
     dateien = storage.entwurf_dateien(entwurf_id)
     if not dateien:
         raise HTTPException(status_code=422, detail="Entwurf enthaelt keine PDFs.")
+    return {
+        "dateien": [{"name": d["name"], "pfad": d["pfad"]} for d in dateien],
+        "stelle": stelle,
+        "kandidat": (kandidat or entwurf["kandidat"]).strip() or entwurf["kandidat"],
+        "ko_kriterien": {
+            "lebenslauf_erforderlich": lebenslauf_erforderlich,
+            "motivationsschreiben_erforderlich": motivationsschreiben_erforderlich,
+        },
+    }
 
-    try:
-        ergebnis = get_pipeline().invoke({
-            "dateien": [{"name": d["name"], "pfad": d["pfad"]} for d in dateien],
-            "stelle": stelle,
-            "kandidat": (kandidat or entwurf["kandidat"]).strip() or entwurf["kandidat"],
-            "ko_kriterien": {
-                "lebenslauf_erforderlich": lebenslauf_erforderlich,
-                "motivationsschreiben_erforderlich": motivationsschreiben_erforderlich,
-            },
-        })
-    except RuntimeError as e:  # z.B. fehlender API-Key
-        raise HTTPException(status_code=500, detail=str(e))
-    except ValueError as e:  # z.B. gescanntes PDF ohne Text
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:  # LLM-/Netzwerkfehler verstaendlich machen
-        if _ist_quota_fehler(e):
-            raise _quota_exception()
-        raise HTTPException(
-            status_code=502, detail=f"Analyse fehlgeschlagen: {str(e)[:300]}"
-        )
 
+def _analyse_fehler(e: Exception) -> HTTPException:
+    """Pipeline-Fehler auf verstaendliche HTTP-Fehler abbilden."""
+    if isinstance(e, RuntimeError):  # z.B. fehlender API-Key
+        return HTTPException(status_code=500, detail=str(e))
+    if isinstance(e, ValueError):  # z.B. gescanntes PDF ohne Text
+        return HTTPException(status_code=422, detail=str(e))
+    if _ist_quota_fehler(e):
+        return _quota_exception()
+    return HTTPException(
+        status_code=502, detail=f"Analyse fehlgeschlagen: {str(e)[:300]}"
+    )
+
+
+def _ergebnis_speichern(entwurf_id: int, ergebnis: dict) -> dict:
+    """Ergebnis in den Verlauf uebernehmen und als API-Antwort aufbereiten."""
     ergebnis_id = storage.speichere_ergebnis(ergebnis)
     storage.loesche_entwurf(entwurf_id)  # analysiert -> lebt jetzt im Verlauf
 
@@ -344,6 +348,134 @@ def analysieren(
         ],
         "bewertung": bewertung.model_dump(mode="json") if bewertung else None,
     }
+
+
+@app.post("/api/entwuerfe/{entwurf_id}/analysieren")
+def analysieren(
+    entwurf_id: int,
+    stelle: str = Form(...),
+    kandidat: str = Form(None),
+    lebenslauf_erforderlich: bool = Form(True),
+    motivationsschreiben_erforderlich: bool = Form(False),
+):
+    """Bewertet einen Entwurf. Synchroner Endpoint (def, nicht async)
+    -> FastAPI fuehrt ihn im Threadpool aus; das Frontend ruft pro
+    Bewerbung auf und zeigt so den Fortschritt pro Kandidat."""
+    eingabe = _analyse_eingabe(
+        entwurf_id, stelle, kandidat,
+        lebenslauf_erforderlich, motivationsschreiben_erforderlich,
+    )
+    try:
+        ergebnis = get_pipeline().invoke(eingabe)
+    except Exception as e:
+        raise _analyse_fehler(e)
+    return _ergebnis_speichern(entwurf_id, ergebnis)
+
+
+@app.post("/api/entwuerfe/{entwurf_id}/analysieren/live")
+async def analysieren_live(
+    entwurf_id: int,
+    stelle: str = Form(...),
+    kandidat: str = Form(None),
+    lebenslauf_erforderlich: bool = Form(True),
+    motivationsschreiben_erforderlich: bool = Form(False),
+):
+    """Wie /analysieren, aber als NDJSON-Stream: Pro abgeschlossenem
+    Pipeline-Schritt kommt sofort eine Zeile {"typ": "schritt", ...} - das
+    Frontend zeichnet daraus das Live-Diagramm. Die Events liefert
+    LangChains astream_events() ueber die benannten Runnables der Kette.
+    Fehler kommen als {"typ": "fehler"}-Zeile, weil der HTTP-Status 200
+    beim Streamen schon gesendet ist."""
+    eingabe = _analyse_eingabe(
+        entwurf_id, stelle, kandidat,
+        lebenslauf_erforderlich, motivationsschreiben_erforderlich,
+    )
+
+    def zeile(daten: dict) -> str:
+        return json.dumps(daten, ensure_ascii=False) + "\n"
+
+    async def strom():
+        ergebnis = None
+        try:
+            async for event in get_pipeline().astream_events(eingabe):
+                if event["event"] != "on_chain_end":
+                    continue
+                name = event.get("name")
+                if name in PIPELINE_SCHRITTE:
+                    schritt: dict = {"typ": "schritt", "schritt": name}
+                    ausgabe = event["data"].get("output")
+                    # Zweig-Entscheidung bzw. Korrektur direkt mitgeben,
+                    # damit das Diagramm nicht auf das Endergebnis warten muss
+                    if name == "ko_pruefung" and isinstance(ausgabe, dict):
+                        grund = ausgabe.get("ko_grund")
+                        schritt["ko_grund"] = grund.value if grund else None
+                    if name == "selbstkritik" and isinstance(ausgabe, dict):
+                        schritt["korrigiert"] = bool(ausgabe.get("korrigiert"))
+                    yield zeile(schritt)
+                elif not event.get("parent_ids"):  # Wurzel-Kette: Endergebnis
+                    ergebnis = event["data"].get("output")
+        except Exception as e:
+            fehler = _analyse_fehler(e)
+            yield zeile({
+                "typ": "fehler",
+                "detail": fehler.detail,
+                "status": fehler.status_code,
+            })
+            return
+        if ergebnis is None:
+            yield zeile({
+                "typ": "fehler",
+                "detail": "Analyse lieferte kein Ergebnis.",
+                "status": 502,
+            })
+            return
+        yield zeile({"typ": "ergebnis", **_ergebnis_speichern(entwurf_id, ergebnis)})
+
+    return StreamingResponse(
+        strom(),
+        media_type="application/x-ndjson",
+        # Puffern unterwegs (Proxys) explizit abschalten, sonst kommen die
+        # Schritt-Zeilen gebuendelt statt live an
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# --- HR-Assistent (Tool-Calling-Agent) ---------------------------------------
+
+class AssistentNachricht(BaseModel):
+    rolle: Literal["nutzer", "assistent"]
+    text: str
+
+
+class AssistentDaten(BaseModel):
+    frage: str
+    verlauf: list[AssistentNachricht] = []
+    stelle: str = ""  # aktuell im Dashboard bearbeitete Ausschreibung
+
+
+@app.post("/api/assistent")
+def assistent(daten: AssistentDaten):
+    """Freie Fragen zu den Screening-Ergebnissen. Anders als die Analyse
+    laeuft hier ein Agent (core/agent.py): Das LLM waehlt selbst, welche
+    Werkzeuge es aufruft. Die Antwort enthaelt die Tool-Aufrufe, damit das
+    UI die Agent-Schritte zeigen kann."""
+    frage = daten.frage.strip()
+    if not frage:
+        raise HTTPException(status_code=422, detail="Frage ist leer.")
+    try:
+        return beantworte_frage(
+            frage,
+            verlauf=[n.model_dump() for n in daten.verlauf],
+            stelle=daten.stelle,
+        )
+    except RuntimeError as e:  # z.B. fehlender API-Key
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        if _ist_quota_fehler(e):
+            raise _quota_exception()
+        raise HTTPException(
+            status_code=502, detail=f"Assistent fehlgeschlagen: {str(e)[:300]}"
+        )
 
 
 # --- Ergebnisse ------------------------------------------------------------

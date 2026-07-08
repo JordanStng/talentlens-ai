@@ -39,6 +39,37 @@ KORREKTUR_HINWEIS = (
     "\n\nKorrekturhinweise aus der Qualitaetspruefung (unbedingt beruecksichtigen):\n- {}"
 )
 
+# Benannte Pipeline-Schritte in Ablauf-Reihenfolge. Die Namen sind zugleich
+# die Event-Namen, die astream_events() liefert - die API streamt sie als
+# Live-Fortschritt, das Frontend zeichnet daraus das Pipeline-Diagramm.
+PIPELINE_SCHRITTE = (
+    "extraktion",
+    "ko_pruefung",
+    "ko_ablehnung",      # Zweig A
+    "zusammenfuehren",   # Zweig B ab hier
+    "anonymisierung",
+    "bewertung",
+    "selbstkritik",
+    "score",
+)
+
+
+def pruefe_ko(dokumente: list[dict], ko_kriterien: dict) -> KOGrund | None:
+    """K.O.-Kriterien ueber den klassifizierten Dokumenten (reines Python,
+    kein LLM). Modul-Funktion statt Closure, damit sie testbar ist."""
+    typen = {d["typ"] for d in dokumente}
+    if (
+        ko_kriterien.get("lebenslauf_erforderlich", True)
+        and DokumentTyp.LEBENSLAUF not in typen
+    ):
+        return KOGrund.LEBENSLAUF_FEHLT
+    if (
+        ko_kriterien.get("motivationsschreiben_erforderlich", False)
+        and DokumentTyp.MOTIVATIONSSCHREIBEN not in typen
+    ):
+        return KOGrund.MOTIVATIONSSCHREIBEN_FEHLT
+    return None
+
 
 def build_screening_pipeline(llm=None) -> Runnable:
     llm = llm or get_llm()
@@ -62,16 +93,7 @@ def build_screening_pipeline(llm=None) -> Runnable:
 
     # --- Schritt 2: K.O.-Kriterien pruefen (ohne LLM) ----------------------
     def _ko_pruefung(state: dict) -> dict:
-        ko = state.get("ko_kriterien", {})
-        typen = {d["typ"] for d in state["dokumente"]}
-        ko_grund = None
-        if ko.get("lebenslauf_erforderlich", True) and DokumentTyp.LEBENSLAUF not in typen:
-            ko_grund = KOGrund.LEBENSLAUF_FEHLT
-        elif (
-            ko.get("motivationsschreiben_erforderlich", False)
-            and DokumentTyp.MOTIVATIONSSCHREIBEN not in typen
-        ):
-            ko_grund = KOGrund.MOTIVATIONSSCHREIBEN_FEHLT
+        ko_grund = pruefe_ko(state["dokumente"], state.get("ko_kriterien", {}))
         return {**state, "ko_grund": ko_grund}
 
     # --- Zweig A: K.O. -> direkte Ablehnung ohne Bewertung -----------------
@@ -162,18 +184,23 @@ def build_screening_pipeline(llm=None) -> Runnable:
         }
 
     bewertungs_zweig = (
-        RunnableLambda(_texte_zusammenfuehren)
-        | RunnableLambda(_anonymisieren)
-        | RunnablePassthrough.assign(bewertung=RunnableLambda(_bewerten))
-        | RunnableLambda(_pruefe_und_korrigiere)
-        | RunnableLambda(_aggregieren)
+        RunnableLambda(_texte_zusammenfuehren, name="zusammenfuehren")
+        | RunnableLambda(_anonymisieren, name="anonymisierung")
+        | RunnablePassthrough.assign(
+            bewertung=RunnableLambda(_bewerten, name="bewertung")
+        )
+        | RunnableLambda(_pruefe_und_korrigiere, name="selbstkritik")
+        | RunnableLambda(_aggregieren, name="score")
     )
 
     return (
-        RunnableLambda(_extrahieren_und_klassifizieren)
-        | RunnableLambda(_ko_pruefung)
+        RunnableLambda(_extrahieren_und_klassifizieren, name="extraktion")
+        | RunnableLambda(_ko_pruefung, name="ko_pruefung")
         | RunnableBranch(
-            (lambda state: state["ko_grund"] is not None, RunnableLambda(_ko_ergebnis)),
+            (
+                lambda state: state["ko_grund"] is not None,
+                RunnableLambda(_ko_ergebnis, name="ko_ablehnung"),
+            ),
             bewertungs_zweig,
         )
     )

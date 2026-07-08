@@ -1,7 +1,9 @@
 import type {
+  AssistentAntwort,
   Entwurf,
   Konfiguration,
   Labels,
+  LiveEreignis,
   ScreeningErgebnis,
   VerlaufEintrag,
 } from "./types";
@@ -145,15 +147,28 @@ export async function bulkUpload(dateien: File[]): Promise<EingangErgebnis> {
   return json(await api("/api/eingang", { method: "POST", body: form }));
 }
 
-export async function analysiereEntwurf(
-  id: number,
-  opts: {
-    kandidat: string;
-    stelle: string;
-    lebenslaufErforderlich: boolean;
-    motivationsschreibenErforderlich: boolean;
-  },
-): Promise<ScreeningErgebnis> {
+export async function frageAssistent(
+  frage: string,
+  verlauf: { rolle: "nutzer" | "assistent"; text: string }[],
+  stelle: string,
+): Promise<AssistentAntwort> {
+  return json(
+    await api("/api/assistent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frage, verlauf, stelle }),
+    }),
+  );
+}
+
+export interface AnalyseOptionen {
+  kandidat: string;
+  stelle: string;
+  lebenslaufErforderlich: boolean;
+  motivationsschreibenErforderlich: boolean;
+}
+
+function analyseForm(opts: AnalyseOptionen): FormData {
   const form = new FormData();
   form.set("kandidat", opts.kandidat);
   form.set("stelle", opts.stelle);
@@ -162,10 +177,61 @@ export async function analysiereEntwurf(
     "motivationsschreiben_erforderlich",
     String(opts.motivationsschreibenErforderlich),
   );
+  return form;
+}
+
+export async function analysiereEntwurf(
+  id: number,
+  opts: AnalyseOptionen,
+): Promise<ScreeningErgebnis> {
   return json(
     await api(`/api/entwuerfe/${id}/analysieren`, {
       method: "POST",
-      body: form,
+      body: analyseForm(opts),
     }),
   );
+}
+
+/** Analyse mit Live-Fortschritt: Der Endpoint streamt eine NDJSON-Zeile pro
+ *  abgeschlossenem Pipeline-Schritt (fuers Diagramm), am Ende das Ergebnis.
+ *  EventSource kann weder POST noch den Passwort-Header, deshalb fetch +
+ *  manuelles Zeilen-Parsen des Response-Streams. */
+export async function analysiereEntwurfLive(
+  id: number,
+  opts: AnalyseOptionen,
+  onSchritt: (ereignis: Extract<LiveEreignis, { typ: "schritt" }>) => void,
+): Promise<ScreeningErgebnis> {
+  const res = await api(`/api/entwuerfe/${id}/analysieren/live`, {
+    method: "POST",
+    body: analyseForm(opts),
+  });
+  if (!res.ok || !res.body) {
+    const detail = await res
+      .json()
+      .then((d) => d.detail as string)
+      .catch(() => res.statusText);
+    throw new ApiError(detail || `HTTP ${res.status}`, res.status);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let puffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    puffer += decoder.decode(value, { stream: true });
+    const zeilen = puffer.split("\n");
+    puffer = zeilen.pop() ?? ""; // letzte (evtl. unvollstaendige) Zeile behalten
+    for (const roh of zeilen) {
+      if (!roh.trim()) continue;
+      const ereignis = JSON.parse(roh) as LiveEreignis;
+      if (ereignis.typ === "schritt") onSchritt(ereignis);
+      else if (ereignis.typ === "fehler")
+        throw new ApiError(ereignis.detail, ereignis.status);
+      else if (ereignis.typ === "ergebnis") return ereignis;
+    }
+  }
+  // Stream endete ohne Ergebnis-Zeile (Verbindungsabbruch) — der Aufrufer
+  // versucht dann, das Ergebnis aus dem Verlauf nachzuladen.
+  throw new ApiError("Verbindung waehrend der Analyse abgebrochen.", 0);
 }

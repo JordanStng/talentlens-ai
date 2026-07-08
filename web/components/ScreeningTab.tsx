@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   analysiereEntwurf,
+  analysiereEntwurfLive,
   ApiError,
   benenneEntwurfUm,
   bulkUpload,
@@ -17,8 +18,11 @@ import type {
   Entwurf,
   EntwurfDatei,
   Labels,
+  LiveEreignis,
+  LiveStand,
   ScreeningErgebnis,
 } from "@/lib/types";
+import PipelineOverlay from "./PipelineOverlay";
 import {
   EmpfehlungChip,
   formatScore,
@@ -35,6 +39,7 @@ interface Karte {
   status: "offen" | "laedt" | "laeuft" | "fertig" | "fehler";
   ergebnis?: ScreeningErgebnis;
   fehler?: string;
+  live?: LiveStand; // gestreamte Pipeline-Schritte der (letzten) Analyse
 }
 
 interface Fortschritt {
@@ -82,6 +87,10 @@ export default function ScreeningTab({
     useState<Fortschritt | null>(null);
   const [eingangInfo, setEingangInfo] = useState<string[]>([]);
   const [eingangFehler, setEingangFehler] = useState<string[]>([]);
+  // Fullscreen-Pipeline-Ansicht (fuer Praesentationen): zeigt die Karte,
+  // deren Analyse gerade laeuft bzw. zuletzt vergroessert wurde
+  const [overlayOffen, setOverlayOffen] = useState(false);
+  const [liveFokusKey, setLiveFokusKey] = useState<number | null>(null);
 
   // Persistierte Entwuerfe wiederherstellen
   useEffect(() => {
@@ -94,6 +103,38 @@ export default function ScreeningTab({
     setKarten((alle) =>
       (alle ?? []).map((k) => (k.key === key ? { ...k, ...patch } : k)),
     );
+
+  /** Ein gestreamtes Schritt-Event in den Live-Stand der Karte einarbeiten. */
+  const liveSchritt = (
+    key: number,
+    ereignis: Extract<LiveEreignis, { typ: "schritt" }>,
+  ) => {
+    const jetzt = Date.now();
+    setKarten((alle) =>
+      (alle ?? []).map((k) =>
+        k.key === key
+          ? {
+              ...k,
+              live: {
+                ...k.live,
+                fertig: [
+                  ...(k.live?.fertig ?? []),
+                  {
+                    schritt: ereignis.schritt,
+                    ms: jetzt - (k.live?.startZeit ?? jetzt),
+                  },
+                ],
+                koGrund:
+                  ereignis.ko_grund !== undefined
+                    ? ereignis.ko_grund
+                    : k.live?.koGrund,
+                korrigiert: k.live?.korrigiert || ereignis.korrigiert === true,
+              },
+            }
+          : k,
+      ),
+    );
+  };
 
   /** Server-Stand einpflegen, ohne bestehende Karten neu zu erzeugen —
    *  so bleiben React-Keys stabil und nichts flackert beim Bulk-Upload. */
@@ -127,7 +168,11 @@ export default function ScreeningTab({
   async function dateienHinzufuegen(karte: Karte, neue: File[]) {
     const pdfs = neue.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
     if (!pdfs.length) return;
-    aktualisiere(karte.key, { status: "laedt", ergebnis: undefined });
+    aktualisiere(karte.key, {
+      status: "laedt",
+      ergebnis: undefined,
+      live: undefined,
+    });
     try {
       const serverId =
         karte.serverId ??
@@ -154,6 +199,7 @@ export default function ScreeningTab({
       dateien: entwurf.dateien,
       status: "offen",
       ergebnis: undefined,
+      live: undefined,
     });
   }
 
@@ -250,14 +296,31 @@ export default function ScreeningTab({
     let fertig = 0;
     for (const k of warteschlange) {
       const kandidat = k.name.trim() || `Bewerbung ${k.serverId}`;
-      aktualisiere(k.key, { status: "laeuft", fehler: undefined });
+      const optionen = {
+        kandidat,
+        stelle,
+        lebenslaufErforderlich: lebenslaufPflicht,
+        motivationsschreibenErforderlich: motivationPflicht,
+      };
+      aktualisiere(k.key, {
+        status: "laeuft",
+        fehler: undefined,
+        live: { fertig: [], startZeit: Date.now() },
+      });
+      setLiveFokusKey(k.key); // Overlay folgt der laufenden Analyse
       try {
-        const ergebnis = await analysiereEntwurf(k.serverId!, {
-          kandidat,
-          stelle,
-          lebenslaufErforderlich: lebenslaufPflicht,
-          motivationsschreibenErforderlich: motivationPflicht,
-        });
+        let ergebnis: ScreeningErgebnis;
+        try {
+          ergebnis = await analysiereEntwurfLive(k.serverId!, optionen, (e) =>
+            liveSchritt(k.key, e),
+          );
+        } catch (e) {
+          // 404 vor Stream-Beginn: Backend (noch) ohne Live-Endpoint —
+          // auf die klassische Analyse ohne Diagramm zurueckfallen
+          if (!(e instanceof ApiError) || e.status !== 404) throw e;
+          aktualisiere(k.key, { live: undefined });
+          ergebnis = await analysiereEntwurf(k.serverId!, optionen);
+        }
         // Entwurf lebt jetzt im Verlauf; Karte zeigt das Ergebnis nur noch an
         aktualisiere(k.key, { status: "fertig", ergebnis, serverId: null });
       } catch (e) {
@@ -279,6 +342,7 @@ export default function ScreeningTab({
     return <p className="text-sm text-ink-faint">Lade…</p>;
 
   const fertige = karten.filter((k) => k.status === "fertig");
+  const fokusKarte = karten.find((k) => k.key === liveFokusKey);
   const stellenTitel = stelle
     .split("\n")
     .map((zeile) => zeile.replace(/^#+\s*/, "").trim())
@@ -351,6 +415,10 @@ export default function ScreeningTab({
           onDateien={(dateien) => dateienHinzufuegen(k, dateien)}
           onDateiEntfernen={(name) => dateiEntfernen(k, name)}
           onEntfernen={() => karteEntfernen(k)}
+          onLiveAnsicht={() => {
+            setLiveFokusKey(k.key);
+            setOverlayOffen(true);
+          }}
         />
       ))}
 
@@ -401,6 +469,22 @@ export default function ScreeningTab({
           </div>
         )}
       </div>
+
+      <PipelineOverlay
+        offen={overlayOffen}
+        onSchliessen={() => setOverlayOffen(false)}
+        kandidat={
+          fokusKarte
+            ? fokusKarte.name.trim() ||
+              fokusKarte.ergebnis?.kandidat ||
+              `Bewerbung ${fokusKarte.serverId ?? ""}`.trim()
+            : null
+        }
+        stand={fokusKarte?.live}
+        laeuft={fokusKarte?.status === "laeuft"}
+        fehlgeschlagen={fokusKarte?.status === "fehler"}
+        ergebnis={fokusKarte?.ergebnis}
+      />
     </div>
   );
 }
@@ -490,6 +574,7 @@ function BewerbungsKarte({
   onDateien,
   onDateiEntfernen,
   onEntfernen,
+  onLiveAnsicht,
 }: {
   karte: Karte;
   labels: Labels;
@@ -499,13 +584,24 @@ function BewerbungsKarte({
   onDateien: (dateien: File[]) => void;
   onDateiEntfernen: (name: string) => void;
   onEntfernen: () => void;
+  onLiveAnsicht: () => void;
 }) {
   const [zieht, setZieht] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { ergebnis } = karte;
+  // Waehrend der Analyse oeffnet ein Klick auf die Karte die Live-Ansicht
+  // der Pipeline (alle Bedienelemente sind dann ohnehin deaktiviert)
+  const klickbar = karte.status === "laeuft";
 
   return (
-    <div className="rise-in rounded-xl border border-line bg-surface p-5">
+    <div
+      onClick={klickbar ? onLiveAnsicht : undefined}
+      className={`rise-in rounded-xl border border-line bg-surface p-5 ${
+        klickbar
+          ? "cursor-pointer transition-colors hover:border-tanne"
+          : ""
+      }`}
+    >
       <div className="flex items-center justify-between gap-4">
         <input
           value={karte.name}
@@ -525,7 +621,8 @@ function BewerbungsKarte({
           )}
           {karte.status === "laeuft" && (
             <span className="flex items-center gap-2 text-xs text-ink-faint">
-              <Spinner /> Wird bewertet…
+              <Spinner /> Wird bewertet —{" "}
+              <span className="text-tanne">klicken für Live-Ansicht</span>
             </span>
           )}
           {karte.status === "fertig" && ergebnis && (
@@ -567,6 +664,15 @@ function BewerbungsKarte({
       )}
       {karte.status === "fehler" && (
         <p className="mt-2 text-sm text-rot">{karte.fehler}</p>
+      )}
+
+      {karte.live && karte.status !== "laeuft" && (
+        <button
+          onClick={onLiveAnsicht}
+          className="mt-2 text-xs font-medium text-tanne transition-colors hover:text-tanne-deep"
+        >
+          Pipeline-Ablauf ansehen →
+        </button>
       )}
 
       {karte.dateien.length > 0 && (

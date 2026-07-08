@@ -101,11 +101,14 @@ export default function DokuTab({ labels }: { labels: Labels }) {
         <p className="text-sm leading-relaxed text-ink-soft">
           Diese Seite erklärt, was zwischen PDF-Upload und Ranking passiert:
           ein Einstieg für alle, die am Code mitarbeiten oder die Ergebnisse
-          nachvollziehen wollen. Kern ist eine{" "}
+          nachvollziehen wollen. Kern sind eine{" "}
           <strong className="font-medium text-ink">
             LangChain-LCEL-Pipeline
           </strong>{" "}
-          (pures LangChain, kein LangGraph), Modell{" "}
+          fürs Screening und ein{" "}
+          <strong className="font-medium text-ink">Tool-Calling-Agent</strong>{" "}
+          für den Assistent-Tab (beides pures LangChain, kein LangGraph),
+          Modell{" "}
           <code className="rounded bg-surface px-1 py-0.5 text-xs">
             {konfig.modell}
           </code>{" "}
@@ -155,6 +158,37 @@ export default function DokuTab({ labels }: { labels: Labels }) {
             </li>
           ))}
         </ol>
+      </section>
+
+      {/* --- Assistent (Agent) -------------------------------------------- */}
+      <section>
+        <h2 className="font-serif text-2xl italic">
+          Der Assistent: hier arbeitet ein Agent
+        </h2>
+        <p className="mt-4 text-sm leading-relaxed text-ink-soft">
+          Das Screening oben ist eine <em>feste</em> Kette — jede Bewerbung
+          durchläuft dieselben Schritte in derselben Reihenfolge. Das ist
+          Absicht: reproduzierbare Scores, planbare Kosten, auditierbarer
+          Ablauf. Der Assistent-Tab funktioniert anders: Dort bekommt das
+          LLM fünf Lese-Werkzeuge (Ergebnisliste, Einzelbewertung, Vergleich,
+          Statistik, Stellenausschreibung) und entscheidet pro Runde selbst,
+          welche es mit welchen Argumenten aufruft — oder ob es genug weiß
+          und antwortet. Eine Frage wie „Warum ist Ben rausgeflogen, und wäre
+          er ohne K.O. besser als Clara?&ldquo; löst so eine
+          Mehrschritt-Kette aus: Ablehnung nachschlagen, Bewertungen holen,
+          vergleichen. Die aufgerufenen Werkzeuge werden unter jeder Antwort
+          eingeblendet.
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Der Agent-Loop ist mit LangChain-Primitiven gebaut (
+          <code className="text-xs">bind_tools</code> +{" "}
+          <code className="text-xs">ToolMessage</code>), nicht mit LangGraph,
+          und auf fünf Werkzeug-Runden begrenzt. Alle Werkzeuge lesen nur —
+          der Agent kann keine Bewertungen ändern.
+        </p>
+        <p className="mt-1.5 text-xs text-ink-faint">
+          <code>core/agent.py</code> · 1 LLM-Aufruf pro Werkzeug-Runde
+        </p>
       </section>
 
       {/* --- Score ------------------------------------------------------- */}

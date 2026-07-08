@@ -60,3 +60,60 @@ export interface Labels {
   ko: Record<string, string>;
   dokumente: Record<string, string>;
 }
+
+// --- Live-Analyse (gestreamte Pipeline-Schritte) -----------------------------
+
+/** Schritt-Namen wie in core/pipeline.py (PIPELINE_SCHRITTE). */
+export type PipelineSchritt =
+  | "extraktion"
+  | "ko_pruefung"
+  | "ko_ablehnung"
+  | "zusammenfuehren"
+  | "anonymisierung"
+  | "bewertung"
+  | "selbstkritik"
+  | "score";
+
+/** Eine NDJSON-Zeile aus /analysieren/live. */
+export type LiveEreignis =
+  | {
+      typ: "schritt";
+      schritt: PipelineSchritt;
+      ko_grund?: string | null; // nur bei ko_pruefung
+      korrigiert?: boolean; // nur bei selbstkritik
+    }
+  | ({ typ: "ergebnis" } & ScreeningErgebnis)
+  | { typ: "fehler"; detail: string; status: number };
+
+/** Ein abgeschlossener Schritt mit Zeit seit Analyse-Start (fuers Protokoll). */
+export interface LiveSchrittEintrag {
+  schritt: PipelineSchritt;
+  ms: number;
+}
+
+/** Aufgelaufener Stand fuers Live-Diagramm einer Bewerbung. */
+export interface LiveStand {
+  fertig: LiveSchrittEintrag[];
+  /** undefined = K.O.-Pruefung noch offen, null = bestanden, sonst der Grund */
+  koGrund?: string | null;
+  korrigiert?: boolean;
+  startZeit?: number; // Date.now() beim Analyse-Start
+}
+
+// --- HR-Assistent (Tool-Calling-Agent) --------------------------------------
+
+export interface ToolAufruf {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+export interface AssistentAntwort {
+  antwort: string;
+  tool_aufrufe: ToolAufruf[];
+}
+
+export interface ChatNachricht {
+  rolle: "nutzer" | "assistent";
+  text: string;
+  toolAufrufe?: ToolAufruf[];
+}
