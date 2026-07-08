@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchKonfiguration } from "@/lib/api";
 import type { Konfiguration, Labels } from "@/lib/types";
-import { EmpfehlungChip, formatScore, ScoreBar } from "./ui";
+import { EmpfehlungChip, formatScore, ScoreBar, StatusChip } from "./ui";
 
 /** Doku fuer Teammitglieder: Wie funktioniert das Screening, wie entsteht
  *  der Score? Gewichte/Schwellen kommen live aus /api/konfiguration und
@@ -264,6 +264,76 @@ export default function DokuTab({ labels }: { labels: Labels }) {
           immer ein Mensch. Kleine Unterschiede (±5 Punkte) sind nicht
           signifikant.
         </p>
+      </section>
+
+      {/* --- Ergebnis-Markierungen ---------------------------------------- */}
+      <section>
+        <h2 className="font-serif text-2xl italic">
+          Was am Ende rauskommen kann
+        </h2>
+        <p className="mt-4 text-sm leading-relaxed text-ink-soft">
+          Diese Markierungen begegnen dir im Live-Flow während der Analyse,
+          im Genehmigt-Tab und im Verlauf:
+        </p>
+        <dl className="mt-5 space-y-4">
+          <div className="flex items-start gap-4">
+            <dt className="w-28 shrink-0 pt-0.5">
+              <StatusChip status="genehmigt" empfehlung="Einladen" />
+            </dt>
+            <dd className="text-sm leading-relaxed text-ink-soft">
+              Screening bestanden mit Gesamt-Score ab{" "}
+              {formatScore(konfig.schwelle_einladen)} — Empfehlung{" "}
+              <em>Einladen</em>.
+            </dd>
+          </div>
+          <div className="flex items-start gap-4">
+            <dt className="w-28 shrink-0 pt-0.5">
+              <StatusChip status="genehmigt" empfehlung="Pruefen" />
+            </dt>
+            <dd className="text-sm leading-relaxed text-ink-soft">
+              Der Graubereich ({formatScore(konfig.schwelle_pruefen)}–
+              {formatScore(konfig.schwelle_einladen)}): hat das Screening
+              überstanden und landet im Genehmigt-Tab, verdient aber einen
+              genaueren menschlichen Blick.
+            </dd>
+          </div>
+          <div className="flex items-start gap-4">
+            <dt className="w-28 shrink-0 pt-0.5">
+              <StatusChip status="abgelehnt" />
+            </dt>
+            <dd className="text-sm leading-relaxed text-ink-soft">
+              Inhaltlich bewertet, aber unter{" "}
+              {formatScore(konfig.schwelle_pruefen)} Punkten — die
+              Schwachstellen stehen als Ablehnungsgründe im Verlauf.
+            </dd>
+          </div>
+          <div className="flex items-start gap-4">
+            <dt className="w-28 shrink-0 pt-0.5">
+              <StatusChip status="abgelehnt" ko />
+            </dt>
+            <dd className="text-sm leading-relaxed text-ink-soft">
+              Am Formal-Check gescheitert (Pflichtdokument fehlt): direkte
+              Ablehnung <em>vor</em> der Bewertung — deshalb ohne Score und
+              ohne LLM-Einschätzung.
+            </dd>
+          </div>
+          <div className="flex items-start gap-4">
+            <dt className="w-28 shrink-0 pt-0.5">
+              <span className="rounded-full bg-gold-soft px-2.5 py-0.5 text-xs font-medium text-gold">
+                korrigiert
+              </span>
+            </dt>
+            <dd className="text-sm leading-relaxed text-ink-soft">
+              Die Selbstkritik hat die erste Bewertung beanstandet — etwa
+              ein Beleg-Zitat, das so nicht im CV steht — und die Bewertung
+              wurde genau einmal mit den Korrekturhinweisen wiederholt.
+              Angezeigt wird immer die korrigierte Fassung. Das sagt nichts
+              über die Person aus, sondern zeigt, dass die
+              Qualitätssicherung gegriffen hat; die Scores dort mit etwas
+              mehr Vorsicht lesen.
+            </dd>
+          </div>
+        </dl>
       </section>
 
       {/* --- K.O. + Ablehnungsgruende ------------------------------------ */}

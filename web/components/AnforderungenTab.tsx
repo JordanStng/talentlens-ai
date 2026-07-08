@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 /** Anforderungskonfiguration: Stellenausschreibung + K.O.-Kriterien.
  *  Standardmaessig eine gerenderte Leseansicht (praesentationstauglich);
@@ -56,12 +57,14 @@ export default function AnforderungenTab({
             <p className="mt-2 text-xs text-ink-faint">
               Markdown wird unterstützt: <code># Titel</code>,{" "}
               <code>## Abschnitt</code>, <code>- Aufzählung</code>,{" "}
-              <code>**fett**</code>.
+              <code>**fett**</code> und Tabellen (
+              <code>| Spalte | Spalte |</code>).
             </p>
           </>
         ) : stelle.trim() ? (
           <div className="mt-4 rounded-xl border border-line bg-surface px-6 py-7 sm:px-8">
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 h1: ({ children }) => (
                   <h3 className="font-serif text-2xl italic text-ink">
@@ -115,6 +118,21 @@ export default function AnforderungenTab({
                   <code className="rounded bg-tanne-soft px-1 py-0.5 text-xs">
                     {children}
                   </code>
+                ),
+                table: ({ children }) => (
+                  <div className="my-4 overflow-x-auto">
+                    <table className="w-full border-collapse">{children}</table>
+                  </div>
+                ),
+                th: ({ children }) => (
+                  <th className="border-b border-line-strong px-3 py-2 text-left text-xs font-medium tracking-wide text-tanne-deep uppercase">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="border-b border-line px-3 py-2 align-top text-sm leading-relaxed text-ink-soft">
+                    {children}
+                  </td>
                 ),
               }}
             >
