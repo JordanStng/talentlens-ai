@@ -166,13 +166,13 @@ export default function DokuTab({ labels }: { labels: Labels }) {
           Der Assistent: hier arbeitet ein Agent
         </h2>
         <p className="mt-4 text-sm leading-relaxed text-ink-soft">
-          Das Screening oben ist eine <em>feste</em> Kette — jede Bewerbung
+          Das Screening oben ist eine <em>feste</em> Kette - jede Bewerbung
           durchläuft dieselben Schritte in derselben Reihenfolge. Das ist
           Absicht: reproduzierbare Scores, planbare Kosten, auditierbarer
           Ablauf. Der Assistent-Tab funktioniert anders: Dort bekommt das
           LLM fünf Lese-Werkzeuge (Ergebnisliste, Einzelbewertung, Vergleich,
           Statistik, Stellenausschreibung) und entscheidet pro Runde selbst,
-          welche es mit welchen Argumenten aufruft — oder ob es genug weiß
+          welche es mit welchen Argumenten aufruft - oder ob es genug weiß
           und antwortet. Eine Frage wie „Warum ist Ben rausgeflogen, und wäre
           er ohne K.O. besser als Clara?&ldquo; löst so eine
           Mehrschritt-Kette aus: Ablehnung nachschlagen, Bewertungen holen,
@@ -183,7 +183,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
           Der Agent-Loop ist mit LangChain-Primitiven gebaut (
           <code className="text-xs">bind_tools</code> +{" "}
           <code className="text-xs">ToolMessage</code>), nicht mit LangGraph,
-          und auf fünf Werkzeug-Runden begrenzt. Alle Werkzeuge lesen nur —
+          und auf fünf Werkzeug-Runden begrenzt. Alle Werkzeuge lesen nur -
           der Agent kann keine Bewertungen ändern.
         </p>
         <p className="mt-1.5 text-xs text-ink-faint">
@@ -282,7 +282,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
             </dt>
             <dd className="text-sm leading-relaxed text-ink-soft">
               Screening bestanden mit Gesamt-Score ab{" "}
-              {formatScore(konfig.schwelle_einladen)} — Empfehlung{" "}
+              {formatScore(konfig.schwelle_einladen)} - Empfehlung{" "}
               <em>Einladen</em>.
             </dd>
           </div>
@@ -303,7 +303,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
             </dt>
             <dd className="text-sm leading-relaxed text-ink-soft">
               Inhaltlich bewertet, aber unter{" "}
-              {formatScore(konfig.schwelle_pruefen)} Punkten — die
+              {formatScore(konfig.schwelle_pruefen)} Punkten - die
               Schwachstellen stehen als Ablehnungsgründe im Verlauf.
             </dd>
           </div>
@@ -313,7 +313,7 @@ export default function DokuTab({ labels }: { labels: Labels }) {
             </dt>
             <dd className="text-sm leading-relaxed text-ink-soft">
               Am Formal-Check gescheitert (Pflichtdokument fehlt): direkte
-              Ablehnung <em>vor</em> der Bewertung — deshalb ohne Score und
+              Ablehnung <em>vor</em> der Bewertung - deshalb ohne Score und
               ohne LLM-Einschätzung.
             </dd>
           </div>
@@ -324,8 +324,8 @@ export default function DokuTab({ labels }: { labels: Labels }) {
               </span>
             </dt>
             <dd className="text-sm leading-relaxed text-ink-soft">
-              Die Selbstkritik hat die erste Bewertung beanstandet — etwa
-              ein Beleg-Zitat, das so nicht im CV steht — und die Bewertung
+              Die Selbstkritik hat die erste Bewertung beanstandet - etwa
+              ein Beleg-Zitat, das so nicht im CV steht - und die Bewertung
               wurde genau einmal mit den Korrekturhinweisen wiederholt.
               Angezeigt wird immer die korrigierte Fassung. Das sagt nichts
               über die Person aus, sondern zeigt, dass die

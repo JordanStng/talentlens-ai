@@ -119,7 +119,7 @@ export default function VerlaufTab({
                     <span className="text-xs text-ink-faint">/100</span>
                   </>
                 ) : (
-                  "—"
+                  "–"
                 )}
               </span>
             </button>

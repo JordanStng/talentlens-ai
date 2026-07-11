@@ -1,18 +1,18 @@
 # TalentLens AI
 
 Agentisches CV-Screening mit **LangChain**: Bewerbungen werden per
-Bulk-Upload eingeworfen — der *Posteingang* erkennt pro PDF automatisch,
+Bulk-Upload eingeworfen - der *Posteingang* erkennt pro PDF automatisch,
 welche Dokumente darin stecken (auch Sammel-PDFs: 2 Seiten Lebenslauf +
 1 Seite Motivationsschreiben in einer Datei), teilt sie auf und ordnet sie
 ueber den erkannten Bewerbernamen der richtigen Bewerbung zu. Danach wird
 gegen die Stellenausschreibung bewertet, nach Score sortiert und im
 Next.js-Dashboard mit Genehmigt- und Verlaufs-Ansicht dargestellt.
 K.O.-Kriterien (z.B. fehlendes Motivationsschreiben) lehnen Bewerbungen
-direkt ab — ohne LLM-Bewertung. Der *Assistent*-Tab beantwortet freie
-Fragen zu den Ergebnissen — dahinter arbeitet ein Tool-Calling-Agent,
+direkt ab - ohne LLM-Bewertung. Der *Assistent*-Tab beantwortet freie
+Fragen zu den Ergebnissen - dahinter arbeitet ein Tool-Calling-Agent,
 der selbst entscheidet, welche Werkzeuge er aufruft.
 
-> Uni-Projekt. **Keine echten Bewerbungen verarbeiten** — siehe
+> Uni-Projekt. **Keine echten Bewerbungen verarbeiten** - siehe
 > [Limitationen](#limitationen).
 
 ## Architektur
@@ -68,12 +68,12 @@ LangChain LCEL-Pipeline:
 ### Design-Entscheidungen
 
 - **Deterministische Pipeline, agentischer Assistent:** Das Screening
-  selbst ist bewusst eine feste LCEL-Kette — reproduzierbare Scores,
+  selbst ist bewusst eine feste LCEL-Kette - reproduzierbare Scores,
   planbare Kosten, auditierbarer Ablauf. Freie Fragen beantwortet dagegen
   der HR-Assistent (`core/agent.py`): ein Tool-Calling-Agent, der pro
   Runde selbst entscheidet, welche seiner fuenf Lese-Werkzeuge
   (Ergebnisliste, Einzelbewertung, Vergleich, Statistik, Ausschreibung)
-  er aufruft — begrenzt auf 5 Runden. Der Agent-Loop nutzt
+  er aufruft - begrenzt auf 5 Runden. Der Agent-Loop nutzt
   LangChain-Primitive (`bind_tools` + `ToolMessage`): LangChain 1.x hat
   den klassischen `AgentExecutor` entfernt, und der Nachfolger
   `create_agent` basiert auf LangGraph, das hier bewusst nicht verwendet
@@ -84,10 +84,10 @@ LangChain LCEL-Pipeline:
   gewichtete Summe in Python (`core/config.py` → `KRITERIEN_GEWICHTE`).
 - **K.O.-Kriterien vor der Bewertung:** Per Haekchen im Dashboard
   konfigurierbar. Die Pipeline klassifiziert jede Datei und lehnt
-  Bewerbungen ohne Pflichtdokument direkt ab (`RunnableBranch`) — spart
+  Bewerbungen ohne Pflichtdokument direkt ab (`RunnableBranch`) - spart
   LLM-Kosten und macht die Regel transparent.
 - **Ablehnungsgruende als Enum:** Statt Freitext liefert das LLM Kategorien
-  (`core/schemas.py` → `AblehnungsGrund`) — im Verlauf sieht man sofort,
+  (`core/schemas.py` → `AblehnungsGrund`) - im Verlauf sieht man sofort,
   *warum* jemand rausgeflogen ist.
 - **Anonymisierung vor der Bewertung:** Das bewertende LLM sieht weder Name
   noch Geschlecht, Alter oder Herkunft (Bias-Mitigation). HR sieht im
@@ -139,12 +139,12 @@ Dann http://localhost:3000 oeffnen:
 
 - **Screening:** Bewerbungs-Karten anlegen, pro Kandidat eine oder mehrere
   PDFs hineinziehen, K.O.-Kriterien anhaken, analysieren.
-- **Genehmigt:** Nur die Kandidaten, die das Screening ueberstanden haben —
+- **Genehmigt:** Nur die Kandidaten, die das Screening ueberstanden haben -
   sortiert nach Score, mit aufklappbarer Begruendung und Zitaten.
-- **Verlauf:** Alle Bewertungen, auch abgelehnte — inkl. K.O.- und
+- **Verlauf:** Alle Bewertungen, auch abgelehnte - inkl. K.O.- und
   Ablehnungsgruenden.
 - **Assistent:** Freie Fragen zu den Ergebnissen ("Vergleiche Anna und
-  David bei den Skills") — der Agent zeigt unter jeder Antwort an,
+  David bei den Skills") - der Agent zeigt unter jeder Antwort an,
   welche Werkzeuge er aufgerufen hat.
 
 **CLI (ohne Frontend, ein Ordner = eine Bewerbung):**
@@ -161,7 +161,7 @@ python scripts/screen_cli.py data/test_cvs/* --ko-motivationsschreiben
 
 Getestet wird die deterministische Kern-Logik (Ranking-Gewichtung,
 K.O.-Pruefung, Schema-Validierung, SQLite-Persistenz, Text-Bereinigung)
-sowie die Werkzeuge und der Agent-Loop des Assistenten — letzterer mit
+sowie die Werkzeuge und der Agent-Loop des Assistenten - letzterer mit
 einem Fake-LLM (`GenericFakeChatModel`), laeuft also ohne API-Key und
 ohne Kosten. Die LLM-Prompts selbst werden nicht automatisiert getestet;
 dafuer gibt es die Testdaten unter `data/test_cvs/` und die CLI.
@@ -171,27 +171,27 @@ dafuer gibt es die Testdaten unter `data/test_cvs/` und die CLI.
 Ein Railway-Projekt, **zwei Services aus demselben GitHub-Repo**. Die
 Start-Commands kommen automatisch aus `railway.json` bzw. `web/railway.json`.
 
-**Service 1 — Backend** (Root Directory: `/`):
+**Service 1 - Backend** (Root Directory: `/`):
 
 | Variable | Wert | Zweck |
 |---|---|---|
 | `GOOGLE_API_KEY` | Key aus AI Studio | Gemini-Zugriff |
-| `TALENTLENS_PASSWORT` | gemeinsames Team-Passwort | Zugriffsschutz — dringend empfohlen, sobald die App oeffentlich erreichbar ist |
+| `TALENTLENS_PASSWORT` | gemeinsames Team-Passwort | Zugriffsschutz - dringend empfohlen, sobald die App oeffentlich erreichbar ist |
 | `PORT` | `8000` | fester Port fuers Private Networking |
 | `TALENTLENS_DATEN` | `/data` | SQLite + Uploads aufs Volume |
 
-Zusaetzlich ein **Volume** anlegen und unter `/data` mounten — sonst sind
+Zusaetzlich ein **Volume** anlegen und unter `/data` mounten - sonst sind
 Verlauf und Entwuerfe nach jedem Deploy weg. Der Service braucht **keine
 Public Domain**: Das Frontend erreicht ihn ueber Railways Private
 Networking (deshalb bindet der Start-Command an `--host ::`, IPv6).
 
-**Service 2 — Frontend** (Root Directory: `web`):
+**Service 2 - Frontend** (Root Directory: `web`):
 
 | Variable | Wert |
 |---|---|
 | `BACKEND_URL` | `http://<backend-service-name>.railway.internal:8000` |
 
-Hier eine **Public Domain generieren** — das ist die URL fuers Team. Ist
+Hier eine **Public Domain generieren** - das ist die URL fuers Team. Ist
 `TALENTLENS_PASSWORT` gesetzt, zeigt das Frontend automatisch eine
 Passwort-Maske.
 
@@ -207,7 +207,7 @@ Bewerbungs-Ordner unter `data/test_cvs/`:
 | Ordner | Profil | Demo-Zweck |
 |---|---|---|
 | `anna_schmidt/` | Statistik-M.Sc., 2 J. Analytics (CV + Anschreiben) | sollte weit oben landen |
-| `ben_keller/` | BWL, Excel gut — **nur CV** | fliegt per K.O. raus, wenn "Motivationsschreiben erforderlich" aktiv |
+| `ben_keller/` | BWL, Excel gut - **nur CV** | fliegt per K.O. raus, wenn "Motivationsschreiben erforderlich" aktiv |
 | `clara_witt/` | Hotelfachfrau, fachfremd | unten / abgelehnt |
 | `david_okafor/` | Starker Backend-Dev, **zweiteiliger CV** + Anschreiben | Klassifikation + Zusammenfuehren, fachlicher Streitfall |
 | `eva_lang/` | Ordentlicher Fit, **zweispaltiges CV-Layout** | Stresstest Text-Extraktion |
@@ -228,11 +228,11 @@ tests/       pytest-Suite (deterministische Logik + Agent-Loop mit Fake-LLM)
 
 - **Kein Ersatz fuer HR-Entscheidungen.** Das System priorisiert nur; die
   Entscheidung trifft ein Mensch. Der **EU AI Act stuft KI-gestuetztes
-  Bewerber-Screening als Hochrisiko-System ein** (Anhang III) — ein
+  Bewerber-Screening als Hochrisiko-System ein** (Anhang III) - ein
   Produktiveinsatz haette erhebliche Auflagen (Transparenz, menschliche
   Aufsicht, Dokumentation).
 - **Datenschutz:** Im Gemini **Free Tier darf Google Eingaben fuer das
-  Training verwenden**. Deshalb ausschliesslich fiktive Test-CVs verwenden —
+  Training verwenden**. Deshalb ausschliesslich fiktive Test-CVs verwenden -
   niemals echte Bewerberdaten (DSGVO!).
 - **Bias:** Die Anonymisierung reduziert offensichtliche Merkmale, kann aber
   indirekte Proxys (Vereinsnamen, Stadtteile, Bildungswege) nicht
@@ -242,7 +242,7 @@ tests/       pytest-Suite (deterministische Logik + Agent-Loop mit Fake-LLM)
   Motivationsschreiben faelschlich als "Sonstiges", greift das K.O. zu
   Unrecht. Die Klassifikation ist deshalb im Verlauf pro Datei einsehbar.
 - **PDF-Grenzen:** Gescannte PDFs (Bilder) werden nicht unterstuetzt (kein
-  OCR). Exotische Layouts koennen die Extraktion verschlechtern —
+  OCR). Exotische Layouts koennen die Extraktion verschlechtern -
   `eva_lang/` demonstriert den Fall.
 - **Kalibrierung:** Auch mit Rubrik und temperature=0 bleiben LLM-Scores
   eine Schaetzung; kleine Score-Unterschiede (±5) sind nicht signifikant.

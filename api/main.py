@@ -158,7 +158,7 @@ def stelle():
 
 @app.get("/api/konfiguration")
 def konfiguration():
-    """Echte Konfigurationswerte fuer den Doku-Tab — immer synchron zum Code."""
+    """Echte Konfigurationswerte fuer den Doku-Tab - immer synchron zum Code."""
     return {
         "modell": MODELL_NAME,
         "gewichte": KRITERIEN_GEWICHTE,

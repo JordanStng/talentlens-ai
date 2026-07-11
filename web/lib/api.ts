@@ -231,7 +231,7 @@ export async function analysiereEntwurfLive(
       else if (ereignis.typ === "ergebnis") return ereignis;
     }
   }
-  // Stream endete ohne Ergebnis-Zeile (Verbindungsabbruch) — der Aufrufer
+  // Stream endete ohne Ergebnis-Zeile (Verbindungsabbruch) - der Aufrufer
   // versucht dann, das Ergebnis aus dem Verlauf nachzuladen.
   throw new ApiError("Verbindung waehrend der Analyse abgebrochen.", 0);
 }

@@ -53,7 +53,7 @@ interface SchrittDetail {
   code: string;
 }
 
-/* Die Code-Ausschnitte sind (leicht gekuerzte) Originalzeilen aus dem Repo —
+/* Die Code-Ausschnitte sind (leicht gekuerzte) Originalzeilen aus dem Repo -
  * bei Aenderungen an der Pipeline hier mitpflegen. */
 const DETAILS: Record<Auswahl, SchrittDetail> = {
   kette: {
@@ -62,12 +62,12 @@ const DETAILS: Record<Auswahl, SchrittDetail> = {
     beschreibung:
       "Die Screening-Pipeline ist eine deklarative LangChain-Kette (LCEL): " +
       "Schritte werden mit dem |-Operator komponiert, die Verzweigung nach " +
-      "der K.O.-Prüfung übernimmt ein RunnableBranch — pures LangChain, " +
+      "der K.O.-Prüfung übernimmt ein RunnableBranch - pures LangChain, " +
       "bewusst kein LangGraph. Diese Live-Ansicht entsteht direkt aus der " +
       "Kette: astream_events() meldet jeden benannten Schritt als Event, " +
       "die API streamt sie zeilenweise ans Frontend.",
     datei: "core/pipeline.py · api/main.py",
-    code: `# core/pipeline.py — die Kette (LCEL, kein LangGraph)
+    code: `# core/pipeline.py - die Kette (LCEL, kein LangGraph)
 return (
     RunnableLambda(_extrahieren_und_klassifizieren, name="extraktion")
     | RunnableLambda(_ko_pruefung, name="ko_pruefung")
@@ -80,7 +80,7 @@ return (
     )
 )
 
-# api/main.py — daraus entstehen die Events dieser Live-Ansicht
+# api/main.py - daraus entstehen die Events dieser Live-Ansicht
 async for event in get_pipeline().astream_events(eingabe):
     if event["event"] == "on_chain_end" and name in PIPELINE_SCHRITTE:
         yield zeile({"typ": "schritt", "schritt": name})`,
@@ -91,7 +91,7 @@ async for event in get_pipeline().astream_events(eingabe):
     beschreibung:
       "Jede hochgeladene PDF wird zu Text extrahiert und vom LLM " +
       "klassifiziert: Lebenslauf, Motivationsschreiben oder Sonstiges. " +
-      "with_structured_output zwingt Gemini in ein Pydantic-Schema — statt " +
+      "with_structured_output zwingt Gemini in ein Pydantic-Schema - statt " +
       "Freitext kommt ein validiertes Objekt zurück.",
     datei: "core/pipeline.py · core/klassifikation.py",
     code: `def _extrahieren_und_klassifizieren(state: dict) -> dict:
@@ -106,14 +106,14 @@ async for event in get_pipeline().astream_events(eingabe):
         )
     return {**state, "dokumente": dokumente}
 
-# core/klassifikation.py — die Chain dahinter
+# core/klassifikation.py - die Chain dahinter
 KLASSIFIKATIONS_PROMPT | llm.with_structured_output(DokumentKlassifikation)`,
   },
   ko_pruefung: {
     titel: "K.O.-Prüfung",
     baustein: "RunnableLambda · kein LLM",
     beschreibung:
-      "Formale K.O.-Kriterien sind reines Python — deterministisch, " +
+      "Formale K.O.-Kriterien sind reines Python - deterministisch, " +
       "kostenlos, in Millisekunden erledigt. Direkt danach entscheidet ein " +
       "RunnableBranch über den Weg: K.O. führt zur sofortigen Ablehnung " +
       "ohne LLM, sonst folgt die volle Bewertung.",
@@ -137,7 +137,7 @@ KLASSIFIKATIONS_PROMPT | llm.with_structured_output(DokumentKlassifikation)`,
     baustein: "RunnableBranch · Zweig A",
     beschreibung:
       "Der kurze Zweig: Fehlt ein Pflichtdokument, wird die Bewerbung ohne " +
-      "jede LLM-Bewertung abgelehnt — mit dokumentiertem K.O.-Grund. Das " +
+      "jede LLM-Bewertung abgelehnt - mit dokumentiertem K.O.-Grund. Das " +
       "spart Kosten und Zeit und verhindert, dass unvollständige " +
       "Bewerbungen inhaltlich bewertet werden.",
     datei: "core/pipeline.py",
@@ -157,7 +157,7 @@ def _ko_ergebnis(state: dict) -> dict:
     beschreibung:
       "Mehrteilige Lebensläufe (z. B. zwei getrennt hochgeladene PDFs) " +
       "werden zu einem CV-Text vereint, Motivationsschreiben bleiben " +
-      "separat. Der Zustand fließt als dict durch die Kette — jeder Schritt " +
+      "separat. Der Zustand fließt als dict durch die Kette - jeder Schritt " +
       "reichert ihn an, LangChain reicht ihn weiter.",
     datei: "core/pipeline.py",
     code: `def _texte_zusammenfuehren(state: dict) -> dict:
@@ -180,7 +180,7 @@ def _ko_ergebnis(state: dict) -> dict:
     baustein: "Chain: Prompt | LLM | StrOutputParser",
     beschreibung:
       "Bias-Mitigation: Vor der Bewertung ersetzt das LLM Namen, " +
-      "Geschlecht, Alter, Herkunft und Kontaktdaten durch [ENTFERNT] — die " +
+      "Geschlecht, Alter, Herkunft und Kontaktdaten durch [ENTFERNT] - die " +
       "Bewertung sieht nur noch Qualifikationen. Eine klassische " +
       "LCEL-Minikette: Prompt, Modell und Parser per |-Operator verbunden.",
     datei: "core/anonymization.py · core/pipeline.py",
@@ -202,7 +202,7 @@ def _anonymisieren(state: dict) -> dict:
     baustein: "with_structured_output(Bewertung)",
     beschreibung:
       "Das Herzstück: Gemini bewertet den anonymisierten CV gegen die " +
-      "Stellenausschreibung — pro Kriterium ein Score von 1–10 mit " +
+      "Stellenausschreibung - pro Kriterium ein Score von 1–10 mit " +
       "Begründung und wörtlichen Belegen aus den Unterlagen. Das " +
       "Pydantic-Schema erzwingt die Struktur, freie Formate sind " +
       "ausgeschlossen.",
@@ -210,7 +210,7 @@ def _anonymisieren(state: dict) -> dict:
     code: `# core/evaluation.py
 BEWERTUNGS_PROMPT | llm.with_structured_output(Bewertung)
 
-# core/schemas.py — das erzwungene Schema
+# core/schemas.py - das erzwungene Schema
 class Bewertung(BaseModel):
     kriterien: list[KriteriumScore]  # Score 1-10, Begruendung, Belege
     staerken: list[str]
@@ -223,7 +223,7 @@ class Bewertung(BaseModel):
     beschreibung:
       "Ein zweiter LLM-Aufruf prüft die eigene Bewertung: Sind alle Scores " +
       "durch die zitierten Belege gedeckt? Wenn nicht, wird die Bewertung " +
-      "genau einmal mit den Beanstandungen als Hinweis wiederholt — bewusst " +
+      "genau einmal mit den Beanstandungen als Hinweis wiederholt - bewusst " +
       "begrenzt, keine Endlosschleife.",
     datei: "core/pipeline.py",
     code: `def _pruefe_und_korrigiere(state: dict) -> dict:
@@ -247,7 +247,7 @@ class Bewertung(BaseModel):
     beschreibung:
       "Aus den Kriterien-Scores wird ein gewichteter Gesamt-Score (10–100) " +
       "berechnet und in eine Empfehlung übersetzt: Einladen, Prüfen oder " +
-      "Ablehnen. Bewusst reines Python statt LLM — reproduzierbar und " +
+      "Ablehnen. Bewusst reines Python statt LLM - reproduzierbar und " +
       "transparent gewichtet. Die finale Entscheidung trifft ein Mensch.",
     datei: "core/ranking.py",
     code: `def berechne_gesamtscore(bewertung: Bewertung) -> float:
@@ -583,7 +583,7 @@ function FlussKnoten({
         {korrigiert && (
           <span
             className="ml-1.5 rounded-full bg-gold-soft px-1.5 text-[10px] font-medium text-gold"
-            title="Die Selbstkritik hat Mängel gefunden — die Bewertung wurde einmal korrigiert wiederholt"
+            title="Die Selbstkritik hat Mängel gefunden - die Bewertung wurde einmal korrigiert wiederholt"
           >
             korrigiert
           </span>
@@ -602,7 +602,7 @@ function FlussKnoten({
   );
 }
 
-/** Hebt LangChain-Bausteine im Code hervor und dimmt Kommentare —
+/** Hebt LangChain-Bausteine im Code hervor und dimmt Kommentare -
  *  bewusst simpel (zeilen-/tokenbasiert) statt echtem Highlighter. */
 const LANGCHAIN_TOKENS =
   /(RunnableLambda|RunnableBranch|RunnablePassthrough|RunnableSequence|with_structured_output|astream_events|StrOutputParser|ChatPromptTemplate|\.invoke)/g;

@@ -34,7 +34,7 @@ export default function AnforderungenTab({
               onClick={() => setBearbeiten(!bearbeiten)}
               className="text-xs font-medium text-tanne transition-colors hover:text-tanne-deep"
             >
-              {bearbeiten ? "Fertig — Leseansicht zeigen" : "Bearbeiten"}
+              {bearbeiten ? "Fertig - Leseansicht zeigen" : "Bearbeiten"}
             </button>
           )}
         </div>

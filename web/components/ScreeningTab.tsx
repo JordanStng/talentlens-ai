@@ -136,7 +136,7 @@ export default function ScreeningTab({
     );
   };
 
-  /** Server-Stand einpflegen, ohne bestehende Karten neu zu erzeugen —
+  /** Server-Stand einpflegen, ohne bestehende Karten neu zu erzeugen -
    *  so bleiben React-Keys stabil und nichts flackert beim Bulk-Upload. */
   const uebernehmeServerStand = (entwuerfe: Entwurf[]) =>
     setKarten((alle) => {
@@ -241,7 +241,7 @@ export default function ScreeningTab({
         if (e instanceof ApiError && (e.status === 429 || e.status === 401)) {
           if (i < pdfs.length - 1)
             fehlerZeilen.push(
-              `Upload abgebrochen — ${pdfs.length - 1 - i} Datei(en) nicht verarbeitet.`,
+              `Upload abgebrochen - ${pdfs.length - 1 - i} Datei(en) nicht verarbeitet.`,
             );
           setBulkFortschritt({ fertig: i + 1, gesamt: pdfs.length });
           break;
@@ -288,7 +288,7 @@ export default function ScreeningTab({
 
   async function analysieren() {
     setLaeuft(true);
-    // alte Upload-Meldungen sind jetzt erledigt — weg damit
+    // alte Upload-Meldungen sind jetzt erledigt - weg damit
     setEingangInfo([]);
     setEingangFehler([]);
     const warteschlange = bereit;
@@ -315,7 +315,7 @@ export default function ScreeningTab({
             liveSchritt(k.key, e),
           );
         } catch (e) {
-          // 404 vor Stream-Beginn: Backend (noch) ohne Live-Endpoint —
+          // 404 vor Stream-Beginn: Backend (noch) ohne Live-Endpoint -
           // auf die klassische Analyse ohne Diagramm zurueckfallen
           if (!(e instanceof ApiError) || e.status !== 404) throw e;
           aktualisiere(k.key, { live: undefined });
@@ -452,7 +452,7 @@ export default function ScreeningTab({
               {fertige.filter((k) => k.ergebnis?.status === "genehmigt").length}{" "}
               genehmigt ·{" "}
               {fertige.filter((k) => k.ergebnis?.status === "abgelehnt").length}{" "}
-              abgelehnt — Details in den Tabs oben.
+              abgelehnt - Details in den Tabs oben.
             </p>
           )}
         </div>
@@ -621,7 +621,7 @@ function BewerbungsKarte({
           )}
           {karte.status === "laeuft" && (
             <span className="flex items-center gap-2 text-xs text-ink-faint">
-              <Spinner /> Wird bewertet —{" "}
+              <Spinner /> Wird bewertet -{" "}
               <span className="text-tanne">klicken für Live-Ansicht</span>
             </span>
           )}
@@ -653,7 +653,7 @@ function BewerbungsKarte({
 
       {karte.status === "fertig" && ergebnis?.ko_grund && (
         <p className="mt-2 text-sm text-rot">
-          {labels.ko[ergebnis.ko_grund] ?? ergebnis.ko_grund} — K.O.-Kriterium,
+          {labels.ko[ergebnis.ko_grund] ?? ergebnis.ko_grund} - K.O.-Kriterium,
           ohne Bewertung abgelehnt.
         </p>
       )}

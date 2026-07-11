@@ -7,7 +7,7 @@ import { Spinner } from "./ui";
 
 /** HR-Assistent: Chat mit dem Tool-Calling-Agenten (core/agent.py).
  *  Anders als das Screening (feste Pipeline) entscheidet hier das LLM
- *  selbst, welche Werkzeuge es aufruft — die Aufrufe werden pro Antwort
+ *  selbst, welche Werkzeuge es aufruft - die Aufrufe werden pro Antwort
  *  eingeblendet, damit die Agent-Schritte nachvollziehbar sind. */
 
 const BEISPIEL_FRAGEN = [
@@ -33,7 +33,7 @@ export default function AssistentTab({ stelle }: { stelle: string }) {
     if (!text || laeuft) return;
     setFehler(null);
     setEingabe("");
-    // Verlauf VOR dem Anfuegen der neuen Frage einfrieren — die Frage
+    // Verlauf VOR dem Anfuegen der neuen Frage einfrieren - die Frage
     // selbst geht separat als `frage` mit.
     const verlauf = nachrichten.map(({ rolle, text }) => ({ rolle, text }));
     setNachrichten((n) => [...n, { rolle: "nutzer", text }]);
@@ -50,7 +50,7 @@ export default function AssistentTab({ stelle }: { stelle: string }) {
       ]);
     } catch (e) {
       setFehler(
-        e instanceof ApiError ? e.message : "API nicht erreichbar — läuft das Backend?",
+        e instanceof ApiError ? e.message : "API nicht erreichbar - läuft das Backend?",
       );
     }
     setLaeuft(false);
@@ -68,7 +68,7 @@ export default function AssistentTab({ stelle }: { stelle: string }) {
           Freie Fragen zu den Screening-Ergebnissen. Hier arbeitet ein{" "}
           <strong className="font-medium text-ink">Agent</strong>: Das LLM
           entscheidet selbst, welche Werkzeuge (Ergebnisliste, Bewertungen,
-          Vergleich, Statistik, Ausschreibung) es aufruft — die Schritte
+          Vergleich, Statistik, Ausschreibung) es aufruft - die Schritte
           werden unter jeder Antwort angezeigt.
         </p>
         {nachrichten.length > 0 && (
@@ -135,7 +135,7 @@ export default function AssistentTab({ stelle }: { stelle: string }) {
 
         {laeuft && (
           <p className="flex items-center gap-2.5 text-sm text-ink-faint">
-            <Spinner /> Der Agent arbeitet — ruft Werkzeuge auf und formuliert
+            <Spinner /> Der Agent arbeitet - ruft Werkzeuge auf und formuliert
             die Antwort …
           </p>
         )}
@@ -165,7 +165,7 @@ export default function AssistentTab({ stelle }: { stelle: string }) {
           </button>
         </div>
         <p className="mt-2 text-xs text-ink-faint">
-          Antworten stützen sich auf die gespeicherten Bewertungen — Scores
+          Antworten stützen sich auf die gespeicherten Bewertungen - Scores
           bleiben LLM-Schätzungen, die Entscheidung trifft ein Mensch.
         </p>
       </form>

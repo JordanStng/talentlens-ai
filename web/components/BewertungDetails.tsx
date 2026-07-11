@@ -72,7 +72,7 @@ export default function BewertungDetails({
       {korrigiert && (
         <p className="text-xs text-ink-faint">
           Die Selbstkritik der Pipeline hat die erste Bewertung beanstandet
-          &mdash; dies ist die korrigierte Fassung.
+          - dies ist die korrigierte Fassung.
         </p>
       )}
     </div>

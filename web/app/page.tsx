@@ -126,7 +126,7 @@ export default function Home() {
             icon={<HilfeIcon />}
           />
           <p className="mt-3 px-3 text-[11px] leading-relaxed text-ink-faint max-md:hidden">
-            Uni-Projekt · LangChain + Gemini. Nur fiktive Testdaten — keine
+            Uni-Projekt · LangChain + Gemini. Nur fiktive Testdaten - keine
             echten Bewerberdaten hochladen.
           </p>
         </div>
@@ -146,7 +146,7 @@ export default function Home() {
           {keyFehlt && !apiFehler && (
             <div className="mb-8 rounded-lg bg-gold-soft px-4 py-3 text-sm text-gold">
               <strong className="font-medium">GOOGLE_API_KEY fehlt.</strong>{" "}
-              Das Backend läuft, hat aber keinen Key — Analysen schlagen fehl.
+              Das Backend läuft, hat aber keinen Key - Analysen schlagen fehl.
               Lege im Projekt-Root eine <code className="text-xs">.env</code>{" "}
               an (Vorlage: <code className="text-xs">.env.example</code>) mit{" "}
               <code className="text-xs">GOOGLE_API_KEY=…</code> und starte das
