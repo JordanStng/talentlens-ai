@@ -63,10 +63,17 @@ nacheinander auf.
 Kandidaten wirklich heissen.
 - {antwort_regel}, kompakt und konkret, in reinem Text ohne \
 Markdown-Formatierung. Nenne Scores als Zahl.
-- Sei transparent: Scores sind LLM-Schaetzungen (Unterschiede unter etwa \
-5 Punkten sind nicht signifikant), K.O.-Ablehnungen sind Formal-Checks \
-ohne inhaltliche Bewertung, und die finale Entscheidung trifft immer ein \
-Mensch.
+- Bei Vergleichen: Nenne konkrete INHALTLICHE Unterschiede aus Begruendungen, \
+Belegen und Staerken - nicht nur Zahlen. Sind die Scores gleich oder sehr \
+aehnlich, arbeite genau heraus, worin sich die Kandidaten fachlich \
+unterscheiden (z.B. Tiefe der Erfahrung, konkrete Technologien, Art der \
+Projekte) und was das fuer die Entscheidung bedeutet. Eine Antwort, die nur \
+sagt "beide haben denselben Score", ist nutzlos.
+- Sei transparent, aber nur wo es zur Frage passt: Scores sind \
+LLM-Schaetzungen, K.O.-Ablehnungen sind Formal-Checks ohne inhaltliche \
+Bewertung, und die finale Entscheidung trifft immer ein Mensch. Haenge diese \
+Hinweise NICHT an jede Antwort - nur wenn sie fuer die konkrete Frage \
+wirklich relevant sind.
 - Fragen ohne Bezug zum Screening (Smalltalk, Allgemeinwissen, ...) lehnst \
 du freundlich ab und verweist auf deinen Zweck."""
 
@@ -156,8 +163,11 @@ def build_werkzeuge(stelle_text: str = "", sprache: str = "de") -> list:
 
     @tool
     def vergleiche_kandidaten(kandidaten: list[str]) -> dict:
-        """Stellt die Kriterien-Scores (1-10) mehrerer Kandidaten nebeneinander,
-        plus Gesamt-Score und Empfehlung. Erwartet mindestens zwei Namen."""
+        """Stellt mehrere Kandidaten nebeneinander: Kriterien-Scores (1-10)
+        samt Begruendung und woertlichen Belegen, dazu Staerken und
+        Zusammenfassung. Nur mit diesen Inhalten lassen sich Kandidaten auch
+        dann unterscheiden, wenn ihre Zahlen gleich sind. Erwartet mindestens
+        zwei Namen."""
         vergleich, nicht_gefunden = [], []
         for name in kandidaten:
             eintrag = _finde(name)
@@ -165,11 +175,18 @@ def build_werkzeuge(stelle_text: str = "", sprache: str = "de") -> list:
                 nicht_gefunden.append(name)
                 continue
             zeile = _kurz(eintrag)
-            if eintrag["bewertung"]:
+            bewertung = eintrag["bewertung"]
+            if bewertung:
                 zeile["kriterien"] = {
-                    ks["kriterium"]: ks["score"]
-                    for ks in eintrag["bewertung"]["kriterien"]
+                    ks["kriterium"]: {
+                        "score": ks["score"],
+                        "begruendung": ks["begruendung"],
+                        "belege": ks["belege"],
+                    }
+                    for ks in bewertung["kriterien"]
                 }
+                zeile["staerken"] = bewertung["staerken"]
+                zeile["zusammenfassung"] = bewertung["zusammenfassung"]
             vergleich.append(zeile)
         ergebnis: dict = {"vergleich": vergleich}
         if nicht_gefunden:
